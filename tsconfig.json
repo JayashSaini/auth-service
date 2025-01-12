@@ -1,0 +1,19 @@
+{
+	"compilerOptions": {
+		"module": "ESNext",
+		"target": "ES6",
+		"moduleResolution": "node",
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"allowJs": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"sourceMap": true,
+		"declaration": true,
+		"noEmitOnError": true,
+		"allowSyntheticDefaultImports": true,
+		"typeRoots": ["./node_modules/@types", "./src/types"]
+	},
+	"exclude": ["node_modules", "dist"]
+}
