@@ -20,6 +20,7 @@
 		"@types/request-ip": "^0.0.41",
 		"prisma": "^6.2.1",
 		"ts-node": "^10.9.2",
+		"tsconfig-paths": "^4.2.0",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.3"
 	},
@@ -33,6 +34,8 @@
 		"jsonwebtoken": "^9.0.2",
 		"morgan": "^1.10.0",
 		"request-ip": "^3.3.0",
-		"winston": "^3.17.0"
+		"ts-node-dev": "^2.0.0",
+		"winston": "^3.17.0",
+		"zod": "^3.24.1"
 	}
 }

@@ -4,16 +4,18 @@ dotenv.config({
 	path: "./.env",
 });
 
-import { connectPrisma } from "./db/prisma.js";
+import { connectPrisma, disconnectPrisma } from "./db/prisma.js";
 import { app } from "./app.js";
 import logger from "./logger/winston.logger.js";
+import { Server } from "http";
 
 const PORT = process.env.PORT || 8000;
+let server: Server | null = null;
 
-async function startApp() {
+async function startApp(): Promise<void> {
 	try {
-		// Start the server
-		app.listen(PORT, () => {
+		// Start the server and store the server instance
+		server = app.listen(PORT, () => {
 			logger.info(`✅ Server is running on port: ${PORT}`);
 		});
 	} catch (error) {
@@ -22,7 +24,34 @@ async function startApp() {
 	}
 }
 
-async function bootstrap() {
+async function stopServer(): Promise<void> {
+	if (!server) return; // Server is not running
+
+	try {
+		await new Promise<void>((resolve, reject) => {
+			server?.close((err) => {
+				if (err) {
+					reject(err); // Reject if there's an error
+				} else {
+					resolve(); // Resolve when the server has been closed
+				}
+			});
+		});
+
+		// Disconnect from the database
+		await disconnectPrisma();
+		logger.info("✅ Server is shutting down...");
+	} catch (error) {
+		logger.error("Error stopping the server: ", error);
+		await disconnectPrisma(); // Disconnect from the database on exit
+		process.exit(1); // Exit process on failure
+	} finally {
+		process.exit(0); // Exit process gracefully
+	}
+}
+
+//   Initializes and starts the server by connecting to the database and launching the application.
+async function startServer(): Promise<void> {
 	try {
 		// Connect to the database
 		await connectPrisma();
@@ -35,5 +64,9 @@ async function bootstrap() {
 	}
 }
 
+// Gracefully handle termination signals
+process.on("SIGINT", stopServer);
+process.on("SIGTERM", stopServer);
+
 // Start the app
-bootstrap();
+startServer();

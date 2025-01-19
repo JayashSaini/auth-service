@@ -35,7 +35,4 @@ const disconnectPrisma = async (): Promise<void> => {
 	}
 };
 
-process.on("SIGINT", disconnectPrisma);
-process.on("SIGTERM", disconnectPrisma);
-
 export { prisma, connectPrisma, disconnectPrisma };
