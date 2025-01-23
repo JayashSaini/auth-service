@@ -4,7 +4,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
 import { User } from "@prisma/client"; // Prisma User type
 import { NextFunction, Request, Response } from "express";
-import { AvailableUserRoles } from "../constants";
+import { AvailableUserRoles, UserRolesEnum } from "../constants.js";
 
 /**
  * Middleware to verify JWT
@@ -81,11 +81,12 @@ export const getLoggedInUserOrIgnore = asyncHandler(async (req, res, next) => {
  */
 export const verifyPermission = (roles: typeof AvailableUserRoles = []) =>
 	asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-		if (!req?.user?.id) {
+		if (!req?.user?.id && !req.user?.role) {
 			throw new ApiError(401, "Unauthorized request");
 		}
 
-		if (roles.includes(req.user?.role || "")) {
+		const userRole: any = req.user?.role;
+		if (roles.includes(userRole)) {
 			next();
 		} else {
 			throw new ApiError(403, "You are not allowed to perform this action");

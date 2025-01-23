@@ -3,4 +3,26 @@ import { PrismaClient } from "@prisma/client";
 
 declare global {
 	var prisma: PrismaClient | undefined;
+	namespace NodeJS {
+		interface ProcessEnv {
+			PORT: number;
+
+			NODE_ENV: "development" | "production";
+
+			DATABASE_URL: string;
+
+			CORS_ORIGIN: string;
+
+			ACCESS_TOKEN_SECRET: string;
+			ACCESS_TOKEN_EXPIRY: string;
+
+			REFRESH_TOKEN_SECRET: string;
+			REFRESH_TOKEN_EXPIRY: string;
+
+			EMAIL_VERIFICATION_TOKEN_SECRET: string;
+			EMAIL_VERIFICATION_TOKEN_EXPIRY: string;
+
+			MAILGUN_API_KEY: string;
+		}
+	}
 }

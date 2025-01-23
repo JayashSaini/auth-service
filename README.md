@@ -1,61 +1,115 @@
 # Auth Service
 
-This is an authentication service built using Node.js and PostgreSQL. It provides essential authentication-related features like user registration, login, and session management.
+## Description
 
-## Prerequisites
+Auth Service is a robust authentication service built from scratch using Node.js and PostgreSQL. It provides essential authentication features such as user registration, login, and session management.
 
-Before you begin, ensure you have the following installed:
+## Table of Contents
 
-- [Node.js](https://nodejs.org/) (version 14.x or higher)
-- [PostgreSQL](https://www.postgresql.org/)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Features](#features)
+- [Technologies](#technologies)
+- [Project Structure](#project-structure)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
 
-## Setup Instructions
+## Installation
 
-Follow these steps to set up and run the Auth service:
+1. Clone the repository:
+   ```
+   git clone https://github.com/your-username/auth-service.git
+   ```
+2. Navigate to the project directory:
+   ```
+   cd auth-service
+   ```
+3. Install dependencies:
+   ```
+   npm install
+   ```
+4. Create a `.env` file in the root directory and configure your environment variables.
 
-### 1. Clone the Repository
+5. Build the application:
+   ```
+   npm run build
+   ```
 
-First, clone the repository to your local machine:
+## Usage
 
-```bash
-git clone https://github.com/your-username/auth-service.git
-cd auth-service
+To start the application, run:
 
 ```
-
-### 2. Install Dependencies
-
-Next, install the necessary dependencies using npm:
-
-```bash
-npm install
-```
-
-### 3. Build the Application
-
-If you are using TypeScript or any build steps, build the application:
-
-```bash
-npm run build
-```
-
-### 4. Configure Environment Variables
-
-Make sure to create a .env file in the root directory and configure the environment variables
-
-### 5. Run the Application
-
-Start the server by running the following command:
-
-```bash
 npm start
 ```
 
-By default, the server will run on http://localhost:8000. You can change the port by modifying the PORT value in the .env file.
+For development with auto-reloading:
+
+```
+npm run dev
+```
+
+## Features
+
+- User registration
+- User login
+- Session management
+- etc.
+
+## Technologies
+
+- Node.js
+- Express
+- TypeScript
+- PostgreSQL
+- Prisma
+- JSON Web Tokens (JWT)
+- bcryptjs
+
+## Project Structure
+
+```
+auth-service/
+├── docs/              # Project documentation
+├── prisma/            # Prisma models and migration files
+├── scripts/           # Utility scripts
+├── src/               # Main source code
+│   ├── controllers/   # Request handlers
+│   ├── db/            # Database setup and models
+│   ├── logger/        # Logging functionality
+│   ├── middlewares/   # Middleware for authentication and validation
+│   ├── routes/        # API routes
+│   ├── schemas/       # Request validation schemas
+│   ├── service/       # Business logic
+│   ├── types/         # TypeScript types
+│   ├── utils/         # Utility functions
+│   ├── validators/    # Input validation functions
+│   ├── app.ts         # Entry point for the application
+│   └── constants.ts   # Application constants
+├── .env               # Environment variables
+├── package.json       # Project dependencies and scripts
+├── tsconfig.json      # TypeScript configuration
+└── README.md          # Project documentation
+
+```
+
+## Configuration
+
+Create a `.env` file in the root directory, copy the [`.env.sample`](.env.sample) file set value according to your environment
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the ISC License.
 
 ## Contact
 
-Feel free to reach out to me:
-
-- Email: [jayashysaini7361@gmail.com](mailto:jayashysaini7361@gmail.com)
-- LinkedIn: [JayashSaini](https://www.linkedin.com/in/jayash-saini-371bb0267/)
+For any inquiries, please contact:
+Jayash Saini
+Email: jayashysaini7361@gmail.com
+LinkedIn: [Jayash Saini](https://www.linkedin.com/in/jayash-saini-371bb0267/)

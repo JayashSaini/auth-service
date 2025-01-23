@@ -27,9 +27,6 @@ const errorHandler = (
 
 	const apiError = error as ApiError;
 
-	// Log the error message
-	logger.error(`${apiError.message}`);
-
 	// Prepare the response
 	const response = {
 		message: apiError.message,

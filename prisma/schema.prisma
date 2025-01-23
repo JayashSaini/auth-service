@@ -15,22 +15,47 @@ datasource db {
 
 
 model User {
-  id      Int      @id @default(autoincrement())
-  email   String   @unique
-  username    String
-  refreshToken String @default("")
-  isEmailVerified Boolean? @default(false)
-  role String @default("USER")
-  password String
-  loginType String @default("ID_PASSWORD")
-  resetPasswordToken String? 
-  resetPasswordExpiry DateTime?
-  emailVerificationToken String?
+  @@map("auth.User") 
+  id                      Int       @id @default(autoincrement())
+  email                   String    @unique
+  username                String
+  password                String
+  refreshToken            String    @default("")
+  isEmailVerified         Boolean   @default(false)
+  role                    Role      @default(USER)
+  loginType               LoginType    @default(ID_PASSWORD)
+  resetPasswordToken      String?
+  resetPasswordExpiry     DateTime?
+  emailVerificationToken  String?
   emailVerificationExpiry DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  failedLoginAttempts Int  @default(0)  // Count of failed login attempts
-  accountLockedUntil DateTime?  // Time until account is locked after multiple failed attempts
-  status String @default("ACTIVE") // Can be "ACTIVE", "SUSPENDED", "DELETED"
+  failedLoginAttempts     Int       @default(0)
+  accountLockedUntil      DateTime?
+  isLocked                Boolean   @default(false)
+  status                  Status    @default(ACTIVE)
+  twoFactorAuthEnabled    Boolean   @default(false)
+  lastLogin               DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@index([email])
+  @@index([username])
+  @@index([status])
 }
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Status {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum LoginType {
+  ID_PASSWORD
+  GOOGLE
+}
+
 

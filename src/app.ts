@@ -63,6 +63,13 @@ app.use(cookieParser());
 app.use(morganMiddleware);
 
 import { errorHandler } from "./middlewares/error.middlewares.js";
+import userRouter from "./routes/user.routes.js";
+import { ApiResponse } from "./utils/ApiResponse.js";
+
+app.use("/api/v1/user", userRouter);
+app.get("/api/v1/healthcheck", (req, res) => {
+	res.status(200).json(new ApiResponse(200, {}, "Server is running"));
+});
 
 // if endpoint not found
 app.use((_, __, next) => {

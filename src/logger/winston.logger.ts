@@ -1,4 +1,5 @@
 import winston from "winston";
+
 // Define your severity levels.
 const levels = {
 	error: 0,
@@ -8,57 +9,64 @@ const levels = {
 	debug: 4,
 };
 
-// This method set the current severity based on
-// the current NODE_ENV: show all the log levels
-// if the server was run in development mode; otherwise,
-// if it was run in production, show only warn and error messages.
-const level = () => {
-	const env = process.env.NODE_ENV || "development";
-	const isDevelopment = env === "development";
-	return isDevelopment ? "debug" : "warn";
-};
-
-// Define different colors for each level.
-// Colors make the log message more visible,
-// adding the ability to focus or ignore messages.
+// Set color mappings
 const colors = {
-	error: "red",
+	error: "red", // Default red color for errors
 	warn: "yellow",
-	info: "blue",
-	http: "magenta",
+	info: "cyan", // Use cyan (aqua blue) for info messages
+	http: "magenta", // Use magenta for HTTP logs (you can adjust if you like another color)
 	debug: "white",
 };
 
-// Tell winston that you want to link the colors
-// defined above to the severity levels.
+// Link colors to levels
 winston.addColors(colors);
 
-// Chose the aspect of your log customizing the log format.
+// Custom format for HTTP logs to highlight status codes with custom colors
+const httpFormat = winston.format.printf((info) => {
+	const { statusCode, message, timestamp } = info;
+	let statusMessage = message;
+
+	// If status code is 400 or above, change the message color to coral red (vivid)
+	if (typeof statusCode === "number" && statusCode >= 400) {
+		statusMessage = `${statusCode} - ${message}`;
+	} else {
+		statusMessage = `${statusCode} - ${message}`;
+	}
+
+	return `[${timestamp}] HTTP ${statusMessage}`;
+});
+
+// General format for logs
 const format = winston.format.combine(
-	// Add the message timestamp with the preferred format
+	// Add timestamp
 	winston.format.timestamp({ format: "DD MMM, YYYY - HH:mm:ss:ms" }),
-	// Tell Winston that the logs must be colored
+	// Colorize the logs
 	winston.format.colorize({ all: true }),
-	// Define the format of the message showing the timestamp, the level and the message
+	// Define log format (timestamp, level, message)
 	winston.format.printf(
 		(info) => `[${info.timestamp}] ${info.level}: ${info.message}`
 	)
 );
 
-// Define which transports the logger must use to print out messages.
-// In this example, we are using three different transports
+// Define transports
 const transports = [
-	// Allow the use the console to print the messages
+	// Console transport for development logs
 	new winston.transports.Console(),
+	// File transport for error logs
 	new winston.transports.File({ filename: "logs/error.log", level: "error" }),
+	// File transport for info logs
 	new winston.transports.File({ filename: "logs/info.log", level: "info" }),
-	new winston.transports.File({ filename: "logs/http.log", level: "http" }),
+	// File transport for HTTP logs, formatted with custom httpFormat
+	new winston.transports.File({
+		filename: "logs/http.log",
+		level: "http",
+		format: winston.format.combine(winston.format.colorize(), httpFormat),
+	}),
 ];
 
-// Create the logger instance that has to be exported
-// and used to log messages.
+// Create the logger instance
 const logger = winston.createLogger({
-	level: level(),
+	level: "debug", // Set level to debug for capturing all logs
 	levels,
 	format,
 	transports,
