@@ -10,12 +10,14 @@ import logger from "./logger/winston.logger.js";
 import { Server } from "http";
 
 const PORT = process.env.PORT || 8000;
+const HOST = process.env.HOST || "0.0.0.0";
+
 let server: Server | null = null;
 
 async function startApp(): Promise<void> {
 	try {
 		// Start the server and store the server instance
-		server = app.listen(PORT, () => {
+		server = app.listen(PORT, HOST, () => {
 			logger.info(`✅ Server is running on port: ${PORT}`);
 		});
 	} catch (error) {
