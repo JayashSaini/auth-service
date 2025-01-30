@@ -25,8 +25,9 @@ const comparePassword = async (
 
 const generateEmailVerificationToken = (email: string) => {
 	// - Generate a unique verification token (e.g., UUID).
-	const emailVerificationSecret = process.env.EMAIL_VERIFICATION_TOKEN_SECRET;
-	const emailVerificationTokenExpiry =
+	const emailVerificationSecret: string =
+		process.env.EMAIL_VERIFICATION_TOKEN_SECRET;
+	const emailVerificationTokenExpiry: string =
 		process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY; // Token expiry in 30 minutes
 
 	const emailVerificationToken = jwt.sign({ email }, emailVerificationSecret, {
@@ -43,8 +44,8 @@ const generateEmailVerificationToken = (email: string) => {
 };
 
 const generateAccessToken = (payload: User) => {
-	const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET;
-	const accessTokenExpiry = process.env.ACCESS_TOKEN_EXPIRY;
+	const accessTokenSecret: string = process.env.ACCESS_TOKEN_SECRET;
+	const accessTokenExpiry: string = process.env.ACCESS_TOKEN_EXPIRY;
 
 	if (!accessTokenSecret || !accessTokenExpiry) {
 		throw new Error(
@@ -60,8 +61,8 @@ const generateAccessToken = (payload: User) => {
 };
 
 const generateRefreshToken = (payload: { id: number }) => {
-	const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET;
-	const refreshTokenExpiry = process.env.REFRESH_TOKEN_EXPIRY;
+	const refreshTokenSecret: string = process.env.REFRESH_TOKEN_SECRET;
+	const refreshTokenExpiry: string = process.env.REFRESH_TOKEN_EXPIRY;
 
 	if (!refreshTokenSecret || !refreshTokenExpiry) {
 		throw new Error(
