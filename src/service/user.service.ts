@@ -32,7 +32,7 @@ const generateEmailVerificationToken = (email: string) => {
 
 	const emailVerificationToken = jwt.sign({ email }, emailVerificationSecret, {
 		// - Set an expiry time (e.g., 30 Min).
-		expiresIn: emailVerificationTokenExpiry, // Token expiry in 30 minutes
+		expiresIn: "30m", // Token expiry in 30 minutes
 	});
 
 	// - Set an expiry time (e.g., 30 minutes).
@@ -54,7 +54,7 @@ const generateAccessToken = (payload: User) => {
 	}
 
 	const accessToken = jwt.sign(payload, accessTokenSecret, {
-		expiresIn: accessTokenExpiry,
+		expiresIn: "1h",
 	});
 
 	return accessToken;
@@ -71,7 +71,7 @@ const generateRefreshToken = (payload: { id: number }) => {
 	}
 
 	const refreshToken = jwt.sign(payload, refreshTokenSecret, {
-		expiresIn: refreshTokenExpiry,
+		expiresIn: "15d",
 	});
 
 	return refreshToken;
