@@ -30,7 +30,6 @@ model User {
   emailVerificationExpiry DateTime?
   failedLoginAttempts     Int       @default(0)
   accountLockedUntil      DateTime?
-  isLocked                Boolean   @default(false)
   status                  Status    @default(ACTIVE)
   twoFactorAuthEnabled    Boolean   @default(false)
   lastLogin               DateTime?
@@ -49,8 +48,10 @@ enum Role {
 
 enum Status {
   ACTIVE
+  BANNED
+  LOCKED
+  INACTIVE
   SUSPENDED
-  DELETED
 }
 
 enum LoginType {

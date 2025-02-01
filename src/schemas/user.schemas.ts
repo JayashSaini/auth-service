@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { StatusEnum } from "../constants.js";
 
 export const registerSchema = z.object({
 	email: z
@@ -50,4 +51,15 @@ export const loginSchema = z.object({
 		.trim()
 		.min(8, "Password must be at least 8 characters")
 		.max(25, "Password cannot be more than 25 characters long."),
+});
+
+export const setUserStatusSchema = z.object({
+	userId: z.number({
+		required_error: "User ID is required",
+		invalid_type_error: "User ID must be a number",
+	}),
+	status: z.enum(["ACTIVE", "BANNED", "SUSPENDED"], {
+		invalid_type_error: "User status is invalid",
+		required_error: "status is required",
+	}),
 });

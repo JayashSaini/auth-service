@@ -9,7 +9,9 @@ export enum UserRolesEnum {
 export enum StatusEnum {
 	ACTIVE = "ACTIVE",
 	SUSPENDED = "SUSPENDED",
-	DELETED = "DELETED",
+	LOCKED = "LOCKED",
+	BANNED = "BANNED",
+	INACTIVE = "INACTIVE",
 }
 
 export enum LoginTypeEnum {

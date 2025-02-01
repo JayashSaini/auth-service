@@ -1,16 +1,86 @@
-import { loginSchema, registerSchema } from "../schemas/user.schemas.js";
+import {
+	loginSchema,
+	registerSchema,
+	setUserStatusSchema,
+} from "../schemas/user.schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { prisma } from "../db/index.js";
 import { ApiError } from "../utils/ApiError.js";
 import { formatDateWithoutTimezone } from "../utils/generalUtils.js";
-import { LoginTypeEnum, StatusEnum } from "../constants.js";
+import { LoginTypeEnum, StatusEnum, UserRolesEnum } from "../constants.js";
+import { Status, User } from "@prisma/client";
+import jwt from "jsonwebtoken";
+
+/**
+ * Check user status and lock status
+ * @function validateUserStatus
+ * @description Handles user status and locked validation.
+ */
+const validateUserStatus = async (user: User) => {
+	if (user.status === StatusEnum.ACTIVE) {
+		return true;
+	}
+
+	// Handle Locked Account
+	if (user.status === StatusEnum.LOCKED) {
+		const lockedUntilDate = user.accountLockedUntil
+			? new Date(user.accountLockedUntil)
+			: null;
+
+		if (!lockedUntilDate || isNaN(lockedUntilDate.getTime())) {
+			throw new ApiError(400, "Invalid account lock date.");
+		}
+
+		if (lockedUntilDate <= new Date()) {
+			// Unlock account after expiration
+			await prisma.user.update({
+				where: { id: user.id },
+				data: { status: StatusEnum.ACTIVE, accountLockedUntil: null },
+			});
+			user.status = StatusEnum.ACTIVE;
+			user.accountLockedUntil = null;
+			return true;
+		}
+
+		throw new ApiError(
+			403,
+			`Your account is locked. Please try again after ${formatDateWithoutTimezone(
+				lockedUntilDate
+			)}.`
+		);
+	}
+
+	// Handle Inactive Account (Reactivating)
+	if (user.status === StatusEnum.INACTIVE) {
+		await prisma.user.update({
+			where: { id: user.id },
+			data: { status: StatusEnum.ACTIVE },
+		});
+		user.status = StatusEnum.ACTIVE;
+		return true;
+	}
+
+	// Handle Suspended or Banned Users
+	if (user.status === StatusEnum.SUSPENDED) {
+		throw new ApiError(
+			403,
+			"Your account is suspended. Contact support for assistance."
+		);
+	}
+
+	if (user.status === StatusEnum.BANNED) {
+		throw new ApiError(403, "Your account has been permanently banned.");
+	}
+
+	// If status is unrecognized, throw an error
+	throw new ApiError(400, "Invalid user status.");
+};
 
 /**
  * Register a new user
  * @function registerValidator
  * @description Handles data validation of registration user.
  */
-
 const registerValidator = asyncHandler(async (req, _, next) => {
 	// Step 1: Validate incoming user data (email, username, password).
 	const parsedData = registerSchema.parse(req.body); // Using Zod schema to validate request data
@@ -47,6 +117,11 @@ const registerValidator = asyncHandler(async (req, _, next) => {
 	next(); // Proceed to the next middleware or handler
 });
 
+/**
+ * Login a new user
+ * @function loginValidator
+ * @description Handles data validation of login user.
+ */
 const loginValidator = asyncHandler(async (req, _, next) => {
 	const { email, password } = req.body;
 
@@ -73,42 +148,8 @@ const loginValidator = asyncHandler(async (req, _, next) => {
 		);
 	}
 
-	// - Verify the user's status. Allow login only if the user status is **ACTIVE**.
-	if (user.status !== StatusEnum.ACTIVE) {
-		const message =
-			user.status === StatusEnum.DELETED
-				? "Your account is deleted, please."
-				: "User is blocked.";
-		throw new ApiError(401, "User is not active.");
-	}
-
-	// - Check if the user account is **Locked**. If locked, do not proceed and respond with the appropriate message, including the **Locked Until** property.
-	if (user.isLocked) {
-		const lockedUntilDate = new Date(user?.accountLockedUntil ?? "");
-
-		// Check if lockedUntilDate is valid
-		if (isNaN(lockedUntilDate.getTime())) {
-			throw new ApiError(400, "Invalid account locked date.");
-		}
-
-		// Check if the lock period has expired
-		if (lockedUntilDate <= new Date()) {
-			// Update account lock status
-			await prisma.user.update({
-				where: { id: user.id },
-				data: { isLocked: false, accountLockedUntil: null },
-			});
-			user.isLocked = false;
-			user.accountLockedUntil = null;
-		} else {
-			throw new ApiError(
-				401,
-				`User account is locked. Please try again after ${formatDateWithoutTimezone(
-					lockedUntilDate
-				)}.`
-			);
-		}
-	}
+	// Check User status and locked status
+	await validateUserStatus(user);
 
 	// 	- check is email verified
 	if (!user.isEmailVerified) {
@@ -121,4 +162,92 @@ const loginValidator = asyncHandler(async (req, _, next) => {
 	next();
 });
 
-export { registerValidator, loginValidator };
+/**
+ * Refresh Access token
+ * @function refreshAccessTokenValidator
+ * @description Handles refresh token validation of user.
+ */
+const refreshAccessTokenValidator = asyncHandler(async (req, _, next) => {
+	// 	Validate the incoming refresh token:
+	const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+	// Check if the refresh token exists and is valid.
+	if (!refreshToken) {
+		throw new ApiError(401, "Refresh token is missing.");
+	}
+
+	let decodedToken;
+
+	try {
+		decodedToken = jwt.verify(
+			refreshToken,
+			process.env.REFRESH_TOKEN_SECRET as string
+		) as jwt.JwtPayload;
+	} catch (error) {
+		if (error instanceof jwt.TokenExpiredError) {
+			// Handle expired token
+			throw new ApiError(401, "Refresh token expired. Please login again.");
+		} else if (error instanceof jwt.JsonWebTokenError) {
+			// Handle invalid token
+			throw new ApiError(400, "Invalid refresh token. Please try again.");
+		} else if (error instanceof jwt.NotBeforeError) {
+			// Handle token used before its valid date
+			throw new ApiError(400, "Refresh token is not yet valid.");
+		} else {
+			// Handle any other errors
+			throw new ApiError(500, "An unexpected error occurred.");
+		}
+	}
+
+	// If the refresh token is valid, retrieve the corresponding user from the database.
+	// Retrieve user details from the database using the refresh token.
+	const user: User | null = await prisma.user.findUnique({
+		where: {
+			id: decodedToken.id,
+		},
+	});
+
+	// If the user does not exist, throw an error.
+	if (!user) {
+		throw new ApiError(404, "User not found.");
+	}
+
+	// Verify the user's status: Only allow login if the status is ACTIVE.
+	await validateUserStatus(user);
+
+	// set user to req object
+	req.user = user;
+
+	// - If all checks pass, continue to the next middleware or handler.
+	next();
+});
+
+const setUserStatusValidator = asyncHandler(async (req, _, next) => {
+	const { userId, status } = req.body;
+	const user = req.user;
+
+	// Validate the incoming user data (userId, status).
+	setUserStatusSchema.parse({ userId, status });
+
+	if (!user) {
+		throw new ApiError(400, "Please login again.");
+	}
+
+	if (user.role !== UserRolesEnum.ADMIN) {
+		throw new ApiError(
+			403,
+			"You do not have permission to change user status."
+		);
+	}
+
+	req.user = user;
+
+	next();
+});
+
+export {
+	registerValidator,
+	loginValidator,
+	refreshAccessTokenValidator,
+	setUserStatusValidator,
+};
