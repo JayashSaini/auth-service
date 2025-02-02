@@ -1,6 +1,8 @@
 import { Router } from "express";
 import {
 	deleteAccountHandler,
+	getAllUsersHandler,
+	getSelfHandler,
 	loginHandler,
 	logoutHandler,
 	refreshAccessTokenHandler,
@@ -34,6 +36,12 @@ router
 
 // authenticated routes starts from here
 router.use(verifyJWT);
+
+// get self
+router.route("/").get(getSelfHandler);
+router
+	.route("/all")
+	.get(verifyPermission([UserRolesEnum.ADMIN]), getAllUsersHandler);
 
 // delete user account
 router

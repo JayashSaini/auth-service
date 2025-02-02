@@ -63,3 +63,13 @@ export const setUserStatusSchema = z.object({
 		required_error: "status is required",
 	}),
 });
+
+export const verifyUserStatus = z.object({
+	status: z.enum(
+		["ACTIVE", "BANNED", "SUSPENDED", "ALL", "INACTIVE", "LOCKED"],
+		{
+			invalid_type_error: "Status is invalid",
+			required_error: "Status is required",
+		}
+	),
+});

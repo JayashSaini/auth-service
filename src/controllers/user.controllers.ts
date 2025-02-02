@@ -11,8 +11,9 @@ import {
 	convertToMilliseconds,
 } from "../service/user.service.js";
 import { LoginTypeEnum, UserRolesEnum } from "../constants.js";
-import { User } from "@prisma/client";
+import { User, Status } from "@prisma/client";
 import { CookieOptions } from "express";
+import { verifyUserStatus } from "../schemas/user.schemas.js";
 // import { sendMail } from "../service/mailgun.service.js";
 
 /**
@@ -402,6 +403,61 @@ const setUserStatusHandler = asyncHandler(async (req, res) => {
 		);
 });
 
+const getSelfHandler = asyncHandler(async (req, res) => {
+	const user = req.user;
+	if (!user) {
+		throw new ApiError(404, "User not found");
+	}
+
+	return res
+		.status(200)
+		.json(new ApiResponse(200, { user }, "User get successfully"));
+});
+
+const getAllUsersHandler = asyncHandler(async (req, res) => {
+	const { page = 1, limit = 10, status = "ALL" } = req.query;
+	const skip = (Number(page) - 1) * Number(limit);
+
+	const parsedStatus = verifyUserStatus.safeParse({ status });
+	if (!parsedStatus.success) {
+		return res
+			.status(400)
+			.json(new ApiResponse(400, null, `Please provide valid status`));
+	}
+
+	// Cast the status to the correct type
+	const statusEnum = status === "ALL" ? undefined : (status as Status);
+
+	const users = await prisma.user.findMany({
+		where: {
+			status: statusEnum,
+		},
+		select: {
+			id: true,
+			email: true,
+			username: true,
+			role: true,
+			status: true,
+			createdAt: true,
+			updatedAt: true,
+			accountLockedUntil: true,
+			lastLogin: true,
+			isEmailVerified: true,
+			loginType: true,
+			twoFactorAuthEnabled: true,
+		},
+		skip: Number(skip),
+		take: Number(limit),
+		orderBy: {
+			createdAt: "desc",
+		},
+	});
+
+	return res
+		.status(200)
+		.json(new ApiResponse(200, { users }, "Users fetched successfully"));
+});
+
 export {
 	registerHandler,
 	loginHandler,
@@ -417,4 +473,6 @@ export {
 	resendOtpHandler,
 	twoFactorAuthHandler,
 	setUserStatusHandler,
+	getSelfHandler,
+	getAllUsersHandler,
 };
