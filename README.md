@@ -97,7 +97,7 @@ auth-service/
 
 ## Configuration
 
-Create a `.env` file in the root directory, copy the [`.env.sample`](.env.sample) file set value according to your environment
+Create a `.env.development` file in the root directory, copy the [`.env.sample`](.env.sample) file set value according to your environment
 
 ## Contributing
 

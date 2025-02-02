@@ -6,10 +6,10 @@
 	"type": "module",
 	"scripts": {
 		"build": "tsc",
-		"start": "node dist/index.js",
+		"start": "NODE_ENV=production node dist/index.js",
 		"postbuild": "node ./scripts/js-extensions.scripts.js",
-		"watch": "tsc --watch",
-		"dev": "concurrently \"npm run watch\" \"nodemon dist/index.js\" --delay 1"
+		"watch": "NODE_ENV=development tsc --watch",
+		"dev": "NODE_ENV=development concurrently \"npm run watch\" \"nodemon dist/index.js\" --delay 1"
 	},
 	"author": "jayash saini",
 	"license": "ISC",

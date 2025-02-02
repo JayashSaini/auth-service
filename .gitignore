@@ -11,6 +11,7 @@ logs/
 # Environment files
 .env
 .env.production
+.env.development
 
 # OS-specific files
 .DS_Store

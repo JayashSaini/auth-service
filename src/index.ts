@@ -1,8 +1,10 @@
 import dotenv from "dotenv";
 // Load environment variables
-dotenv.config({
-	path: "./.env",
-});
+if (process.env.NODE_ENV === "production") {
+	dotenv.config({ path: ".env.production" });
+} else {
+	dotenv.config({ path: ".env.development" });
+}
 
 import { connectPrisma, disconnectPrisma } from "./db/prisma.js";
 import { app } from "./app.js";
