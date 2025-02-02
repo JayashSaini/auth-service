@@ -14,6 +14,8 @@ import { LoginTypeEnum, UserRolesEnum } from "../constants.js";
 import { User, Status } from "@prisma/client";
 import { CookieOptions } from "express";
 import { verifyUserStatus } from "../schemas/user.schemas.js";
+import { sessionService } from "../service/session.service.js";
+import { ipBlockService } from "../service/ipBlock.service.js";
 // import { sendMail } from "../service/mailgun.service.js";
 
 /**
@@ -105,60 +107,102 @@ const registerHandler = asyncHandler(async (req, res) => {
  */
 const loginHandler = asyncHandler(async (req, res) => {
 	const { email, password } = req.body;
+	const clientIp = req.clientIp || req.ip;
 
-	// Fetch the user from the database
-	const user: User | null = await prisma.user.findUnique({
-		where: { email },
-	});
+	try {
+		// Check if IP is blocked
+		const isBlocked = await ipBlockService.isIpBlocked(clientIp ?? "none");
+		if (isBlocked) {
+			throw new ApiError(
+				403,
+				"Your IP is temporarily blocked. Please try again later."
+			);
+		}
 
-	if (!user) {
-		throw new ApiError(404, "User not found");
-	}
-
-	// Compare the provided password with the stored password.
-	const isPasswordValid = await comparePassword(password, user.password);
-
-	// If password is incorrect, handle failed login attempts
-	if (!isPasswordValid) {
-		await handleFailedLoginAttempts(user);
-		throw new ApiError(401, "Invalid credentials"); // Make it generic to avoid revealing if it's email or password
-	}
-
-	// Check if Two-Factor Authentication (2FA) is enabled
-	if (user.twoFactorAuthEnabled) {
-		// TODO: Send OTP for verification
-		// You will need to handle OTP generation, storage, and validation separately.
-		return res.status(200).json(new ApiResponse(200, "OTP sent for 2FA"));
-	}
-
-	// Proceed to generate tokens and update the user's record in the database
-
-	const transaction = await prisma.$transaction(async (prisma) => {
-		const { accessToken, refreshToken } = await generateTokens(user);
-
-		res.cookie("accessToken", accessToken, {
-			...cookieOptions,
-			maxAge: convertToMilliseconds(process.env.ACCESS_TOKEN_EXPIRY),
+		// Fetch the user
+		const user = await prisma.user.findUnique({
+			where: { email },
 		});
 
-		res.cookie("refreshToken", refreshToken, cookieOptions);
+		if (!user) {
+			throw new ApiError(404, "User not found");
+		}
 
-		// Store the refresh token, reset failed login attempts, and update last login
+		// Check if account is locked
+		if (user.accountLockedUntil && user.accountLockedUntil > new Date()) {
+			throw new ApiError(
+				403,
+				`Account locked. Please try again after ${user.accountLockedUntil.toLocaleString()}`
+			);
+		}
+
+		// Verify password
+		const isPasswordValid = await comparePassword(password, user.password);
+
+		if (!isPasswordValid) {
+			await ipBlockService.handleFailedLogin(user, clientIp ?? "");
+			throw new ApiError(401, "Invalid credentials");
+		}
+
+		// Reset failed attempts on successful login
 		await prisma.user.update({
 			where: { id: user.id },
 			data: {
-				refreshToken,
-				failedLoginAttempts: 0, // Reset failed login attempts
-				lastLogin: new Date(), // Update last login timestamp
+				failedLoginAttempts: 0,
+				accountLockedUntil: null,
 			},
 		});
 
-		return { accessToken, refreshToken, user };
-	});
+		// Check if Two-Factor Authentication (2FA) is enabled
+		if (user.twoFactorAuthEnabled) {
+			// TODO: Send OTP for verification
+			// You will need to handle OTP generation, storage, and validation separately.
+			return res.status(200).json(new ApiResponse(200, "OTP sent for 2FA"));
+		}
 
-	return res
-		.status(200)
-		.json(new ApiResponse(200, transaction, "User logged in successfully."));
+		// Proceed to generate tokens and update the user's record in the database
+
+		const transaction = await prisma.$transaction(async (prisma) => {
+			// First invalidate any existing sessions
+			await prisma.userSession.updateMany({
+				where: {
+					userId: user.id,
+					isValid: true,
+				},
+				data: { isValid: false },
+			});
+
+			const { accessToken, refreshToken } = await generateTokens(user);
+
+			// Create new session
+			await sessionService.createSession(user.id, req);
+
+			res.cookie("accessToken", accessToken, {
+				...cookieOptions,
+				maxAge: convertToMilliseconds(process.env.ACCESS_TOKEN_EXPIRY),
+			});
+
+			res.cookie("refreshToken", refreshToken, cookieOptions);
+
+			// Store the refresh token, reset failed login attempts, and update last login
+			await prisma.user.update({
+				where: { id: user.id },
+				data: {
+					refreshToken,
+					failedLoginAttempts: 0, // Reset failed login attempts
+					lastLogin: new Date(), // Update last login timestamp
+				},
+			});
+
+			return { accessToken, refreshToken, user };
+		});
+
+		return res
+			.status(200)
+			.json(new ApiResponse(200, transaction, "User logged in successfully."));
+	} catch (error) {
+		throw error;
+	}
 });
 
 /**
@@ -301,27 +345,37 @@ const setUserRoleHandler = asyncHandler(async (req, res) => {});
  * @description Logs the user out and invalidates their access/refresh tokens.
  */
 const logoutHandler = asyncHandler(async (req, res) => {
-	// Get the user from req.user and validate it.
-	const user: User | undefined | null = req.user;
+	const user = req.user;
 
 	if (!user) {
 		throw new ApiError(404, "User not found");
 	}
 
-	// Clear the cookies to log the user out.
-	res.clearCookie("accessToken");
-	res.clearCookie("refreshToken");
+	// Invalidate current session and clear cookies in a transaction
+	await prisma.$transaction(async (prisma) => {
+		// Invalidate the current session using the refresh token
+		await prisma.userSession.updateMany({
+			where: {
+				userId: user.id,
+				refreshToken: req.cookies.refreshToken,
+				isValid: true,
+			},
+			data: { isValid: false },
+		});
 
-	// Remove the refresh token from the database.
-	await prisma.user.update({
-		where: { id: user.id },
-		data: {
-			refreshToken: "",
-			lastLogin: new Date(), // Update last login timestamp
-		},
+		// Clear cookies and remove refresh token
+		res.clearCookie("accessToken");
+		res.clearCookie("refreshToken");
+
+		await prisma.user.update({
+			where: { id: user.id },
+			data: {
+				refreshToken: "",
+				lastLogin: new Date(),
+			},
+		});
 	});
 
-	// Return a success response.
 	return res
 		.status(200)
 		.json(new ApiResponse(200, {}, "User logged out successfully."));
@@ -458,6 +512,69 @@ const getAllUsersHandler = asyncHandler(async (req, res) => {
 		.json(new ApiResponse(200, { users }, "Users fetched successfully"));
 });
 
+const getUserSessionsHandler = asyncHandler(async (req, res) => {
+	const user = req.user;
+
+	if (!user) {
+		throw new ApiError(404, "User not found");
+	}
+
+	const sessions = await sessionService.getUserSessions(user.id);
+
+	return res
+		.status(200)
+		.json(
+			new ApiResponse(200, { sessions }, "Sessions retrieved successfully")
+		);
+});
+
+const terminateSessionHandler = asyncHandler(async (req, res) => {
+	const { sessionId } = req.params;
+	const user = req.user;
+
+	if (!user) {
+		throw new ApiError(404, "User not found");
+	}
+
+	const session = await prisma.userSession.findUnique({
+		where: { id: sessionId },
+	});
+
+	if (!session || session.userId !== user.id) {
+		throw new ApiError(403, "Unauthorized to terminate this session");
+	}
+
+	await sessionService.invalidateSession(sessionId);
+
+	return res
+		.status(200)
+		.json(new ApiResponse(200, {}, "Session terminated successfully"));
+});
+
+const terminateAllSessionsHandler = asyncHandler(async (req, res) => {
+	const user = req.user;
+
+	if (!user) {
+		throw new ApiError(404, "User not found");
+	}
+
+	await prisma.userSession.updateMany({
+		where: {
+			userId: user.id,
+			isValid: true,
+		},
+		data: { isValid: false },
+	});
+
+	// Clear current session cookies
+	res.clearCookie("accessToken");
+	res.clearCookie("refreshToken");
+
+	return res
+		.status(200)
+		.json(new ApiResponse(200, {}, "All sessions terminated successfully"));
+});
+
 export {
 	registerHandler,
 	loginHandler,
@@ -475,4 +592,7 @@ export {
 	setUserStatusHandler,
 	getSelfHandler,
 	getAllUsersHandler,
+	getUserSessionsHandler,
+	terminateSessionHandler,
+	terminateAllSessionsHandler,
 };

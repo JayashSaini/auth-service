@@ -5,38 +5,50 @@ import requestIp from "request-ip";
 import { ApiError } from "./utils/ApiError.js";
 import cookieParser from "cookie-parser";
 import morganMiddleware from "./logger/morgon.logger.js";
+import swaggerUi from "swagger-ui-express";
+import { specs } from "./docs/swagger.js";
+import { ipBlockService } from "./service/ipBlock.service.js";
 
 const app = express();
 
-// global middlewares
-app.use(
-	cors({
-		origin:
-			process.env.CORS_ORIGIN === "*"
-				? "*" // This might give CORS error for some origins due to credentials set to true
-				: process.env.CORS_ORIGIN?.split(","), // For multiple cors origin for production. Refer https://github.com/hiteshchoudhary/apihub/blob/a846abd7a0795054f48c7eb3e71f3af36478fa96/.env.sample#L12C1-L12C12
-		credentials: true,
-	})
-);
+// Add type for environment variables
+declare global {
+	namespace NodeJS {
+		interface ProcessEnv {
+			CORS_ORIGIN: string;
+			NODE_ENV: "development" | "production";
+			// Add other env variables
+		}
+	}
+}
+
+// Separate middleware configuration
+const corsOptions: cors.CorsOptions = {
+	origin:
+		process.env.CORS_ORIGIN === "*" ? "*" : process.env.CORS_ORIGIN.split(","),
+	credentials: true,
+};
+
+app.use(cors(corsOptions));
 
 app.use(requestIp.mw());
 
 // Rate limiter to avoid misuse of the service and avoid cost spikes
 const limiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 5000, // Limit each IP to 500 requests per `window` (here, per 15 minutes)
-	standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-	legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-	keyGenerator: (req: Request, _: Response) => {
-		// Ensure that the keyGenerator always returns a string
-		return req.clientIp || "unknown-ip"; // Return a fallback string if clientIp is undefined
-	},
-	handler: (_, __, ___, options) => {
+	windowMs: 60 * 1000, // 1 minute
+	max: 500, // Limit each IP to 500 requests per minute
+	standardHeaders: true,
+	legacyHeaders: false,
+	keyGenerator: (req: Request) => req.clientIp || "unknown-ip",
+	handler: async (req, _, __, options) => {
+		const clientIp = req.clientIp || "unknown-ip";
+
+		// Block IP for 24 hours if rate limit is exceeded
+		await ipBlockService.blockIp(clientIp);
+
 		throw new ApiError(
-			options.statusCode || 500,
-			`There are too many requests. You are only allowed ${
-				options.max
-			} requests per ${options.windowMs / 60000} minutes`
+			429,
+			`Too many requests. Your IP has been blocked for 24 hours due to excessive requests.`
 		);
 	},
 });
@@ -71,6 +83,8 @@ app.get("/api/v1/healthcheck", (req, res) => {
 	res.status(200).json(new ApiResponse(200, {}, "Server is running"));
 });
 
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+
 // if endpoint not found
 app.use((_, __, next) => {
 	const error = new ApiError(404, "endpoint not found");
@@ -79,5 +93,7 @@ app.use((_, __, next) => {
 
 // common error handling middleware
 app.use(errorHandler);
+
+// Add Swagger documentation route
 
 export { app };

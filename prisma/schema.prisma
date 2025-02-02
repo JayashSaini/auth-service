@@ -13,7 +13,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model User {
   @@map("auth.User") 
   id                      Int       @id @default(autoincrement())
@@ -35,10 +34,26 @@ model User {
   lastLogin               DateTime?
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
+  sessions                UserSession[]
 
   @@index([email])
   @@index([username])
   @@index([status])
+}
+
+model UserSession {
+  id            String   @id @default(cuid())
+  userId        Int      // Changed from String to Int to match User.id
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceInfo    String   // Browser, OS, etc.
+  ipAddress     String
+  lastActive    DateTime @default(now())
+  isValid       Boolean  @default(true)
+  refreshToken  String?  // Store session-specific refresh token
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
 }
 
 enum Role {
@@ -57,6 +72,21 @@ enum Status {
 enum LoginType {
   ID_PASSWORD
   GOOGLE
+}
+
+model BlockedIP {
+  ip           String   @id
+  blockedUntil DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model FailedAttempt {
+  id        Int      @id @default(autoincrement())
+  ip        String
+  createdAt DateTime @default(now())
+
+  @@index([ip, createdAt])
 }
 
 
