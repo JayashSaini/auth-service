@@ -144,15 +144,6 @@ const loginHandler = asyncHandler(async (req, res) => {
 			throw new ApiError(401, "Invalid credentials");
 		}
 
-		// Reset failed attempts on successful login
-		await prisma.user.update({
-			where: { id: user.id },
-			data: {
-				failedLoginAttempts: 0,
-				accountLockedUntil: null,
-			},
-		});
-
 		// Check if Two-Factor Authentication (2FA) is enabled
 		if (user.twoFactorAuthEnabled) {
 			// TODO: Send OTP for verification
@@ -162,44 +153,46 @@ const loginHandler = asyncHandler(async (req, res) => {
 
 		// Proceed to generate tokens and update the user's record in the database
 
-		const transaction = await prisma.$transaction(async (prisma) => {
-			// First invalidate any existing sessions
-			await prisma.userSession.updateMany({
-				where: {
-					userId: user.id,
-					isValid: true,
-				},
-				data: { isValid: false },
-			});
+		// First invalidate any existing sessions
+		await prisma.userSession.updateMany({
+			where: {
+				userId: user.id,
+				isValid: true,
+			},
+			data: { isValid: false },
+		});
 
-			const { accessToken, refreshToken } = await generateTokens(user);
+		const { accessToken, refreshToken } = await generateTokens(user);
 
-			// Create new session
-			await sessionService.createSession(user.id, req);
+		res.cookie("refreshToken", refreshToken, cookieOptions);
+		res.cookie("accessToken", accessToken, {
+			...cookieOptions,
+			maxAge: convertToMilliseconds(process.env.ACCESS_TOKEN_EXPIRY),
+		});
 
-			res.cookie("accessToken", accessToken, {
-				...cookieOptions,
-				maxAge: convertToMilliseconds(process.env.ACCESS_TOKEN_EXPIRY),
-			});
+		// Create new session
+		await sessionService.createSession(user.id, req);
 
-			res.cookie("refreshToken", refreshToken, cookieOptions);
-
-			// Store the refresh token, reset failed login attempts, and update last login
-			await prisma.user.update({
-				where: { id: user.id },
-				data: {
-					refreshToken,
-					failedLoginAttempts: 0, // Reset failed login attempts
-					lastLogin: new Date(), // Update last login timestamp
-				},
-			});
-
-			return { accessToken, refreshToken, user };
+		// Store the refresh token, reset failed login attempts, and update last login
+		const updatedUser = await prisma.user.update({
+			where: { id: user.id },
+			data: {
+				refreshToken: refreshToken,
+				failedLoginAttempts: 0, // Reset failed login attempts
+				lastLogin: new Date(), // Update last login timestamp
+				accountLockedUntil: null,
+			},
 		});
 
 		return res
 			.status(200)
-			.json(new ApiResponse(200, transaction, "User logged in successfully."));
+			.json(
+				new ApiResponse(
+					200,
+					{ accessToken, refreshToken, user: updatedUser },
+					"User logged in successfully."
+				)
+			);
 	} catch (error) {
 		throw error;
 	}

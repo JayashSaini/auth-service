@@ -1,12 +1,13 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { User } from "@prisma/client";
+import { Role, Status, User } from "@prisma/client";
 import { prisma } from "../db/index.js";
 import { ApiError } from "../utils/ApiError.js";
 import {
 	ACCOUNT_LOCK_DURATION,
 	MAX_LOGIN_ATTEMPTS,
 	StatusEnum,
+	UserRolesEnum,
 } from "../constants.js";
 
 // Hash password using bcrypt
@@ -57,7 +58,12 @@ const generateEmailVerificationToken = (email: string) => {
 
 // Generate access token
 // This function creates a JWT access token using user information with a 1-hour expiry.
-const generateAccessToken = (payload: User) => {
+const generateAccessToken = (payload: {
+	id: number;
+	email: string;
+	status: Status;
+	role: Role;
+}) => {
 	const accessTokenSecret: string = process.env.ACCESS_TOKEN_SECRET;
 	const accessTokenExpiry: string = process.env.ACCESS_TOKEN_EXPIRY;
 
@@ -70,8 +76,7 @@ const generateAccessToken = (payload: User) => {
 
 	// Create the access token using the user's payload and secret key
 	const accessToken = jwt.sign(payload, accessTokenSecret, {
-		expiresIn: "1h", // Token expiry in 1 hour
-		algorithm: "HS256",
+		expiresIn: accessTokenExpiry, // Token expiry in 1 hour
 	});
 
 	// Return the generated access token
@@ -93,8 +98,7 @@ const generateRefreshToken = (payload: { id: number }) => {
 
 	// Create the refresh token using the user's payload and secret key
 	const refreshToken = jwt.sign(payload, refreshTokenSecret, {
-		expiresIn: "15d", // Token expiry in 15 days
-		algorithm: "HS256",
+		expiresIn: refreshTokenExpiry, // Token expiry in 15 days
 	});
 
 	// Return the generated refresh token
@@ -111,9 +115,13 @@ const generateTokens = async (
 }> => {
 	try {
 		// Generate the access and refresh tokens
-		const accessToken = generateAccessToken(user);
-		const refreshToken = generateRefreshToken(user);
-
+		const accessToken = generateAccessToken({
+			id: user.id,
+			email: user.email,
+			status: user.status,
+			role: user.role,
+		});
+		const refreshToken = generateRefreshToken({ id: user.id });
 		// Return both tokens
 		return { accessToken, refreshToken };
 	} catch (error) {

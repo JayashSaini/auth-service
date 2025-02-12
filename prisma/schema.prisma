@@ -38,7 +38,6 @@ model User {
 
   @@index([email])
   @@index([username])
-  @@index([status])
 }
 
 model UserSession {
