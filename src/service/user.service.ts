@@ -9,6 +9,7 @@ import {
 	StatusEnum,
 	UserRolesEnum,
 } from "../constants.js";
+import { config } from "../config/index.js";
 
 // Hash password using bcrypt
 // This function hashes the user's password with a salt and returns the hashed password.
@@ -37,10 +38,9 @@ const comparePassword = async (
 // Generate email verification token
 // This function generates a JWT token for email verification with a 30-minute expiry.
 const generateEmailVerificationToken = (email: string) => {
-	const emailVerificationSecret: string =
-		process.env.EMAIL_VERIFICATION_TOKEN_SECRET;
+	const emailVerificationSecret: string = config.emailVerificationToken.secret;
 	const emailVerificationTokenExpiry: string =
-		process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY; // Token expiry in 30 minutes
+		config.emailVerificationToken.expiry; // Token expiry in 30 minutes
 
 	// Create the token using the email and a secret key
 	const emailVerificationToken = jwt.sign({ email }, emailVerificationSecret, {
@@ -64,8 +64,8 @@ const generateAccessToken = (payload: {
 	status: Status;
 	role: Role;
 }) => {
-	const accessTokenSecret: string = process.env.ACCESS_TOKEN_SECRET;
-	const accessTokenExpiry: string = process.env.ACCESS_TOKEN_EXPIRY;
+	const accessTokenSecret: string = config.accessToken.secret;
+	const accessTokenExpiry: string = config.accessToken.expiry;
 
 	// Throw an error if either the secret or expiry is missing
 	if (!accessTokenSecret || !accessTokenExpiry) {
@@ -86,8 +86,8 @@ const generateAccessToken = (payload: {
 // Generate refresh token
 // This function creates a JWT refresh token for the user with a 15-day expiry.
 const generateRefreshToken = (payload: { id: number }) => {
-	const refreshTokenSecret: string = process.env.REFRESH_TOKEN_SECRET;
-	const refreshTokenExpiry: string = process.env.REFRESH_TOKEN_EXPIRY;
+	const refreshTokenSecret: string = config.refreshToken.secret;
+	const refreshTokenExpiry: string = config.refreshToken.expiry;
 
 	// Throw an error if either the secret or expiry is missing
 	if (!refreshTokenSecret || !refreshTokenExpiry) {

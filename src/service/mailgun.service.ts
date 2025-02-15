@@ -2,6 +2,7 @@
 import logger from "../logger/winston.logger.js"; // Custom logger for logging warnings or errors.
 import formData from "form-data"; // For handling form data required by Mailgun.
 import Mailgun from "mailgun.js"; // Mailgun SDK to send emails via Mailgun API.
+import { config } from "../config/index.js";
 
 // Initialize Mailgun client using formData.
 const mailgun = new Mailgun(formData);
@@ -9,7 +10,7 @@ const mailgun = new Mailgun(formData);
 // Initialize the Mailgun client with API credentials (API key and username).
 const mg = mailgun.client({
 	username: "api", // Default username for Mailgun API.
-	key: process.env.MAILGUN_API_KEY || "key-yourkeyhere", // Retrieve the API key from environment variables, with a fallback default.
+	key: config.mailgun.apiKey || "key-yourKeyHere", // Retrieve the API key from environment variables, with a fallback default.
 });
 
 /**

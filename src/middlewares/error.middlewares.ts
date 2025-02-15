@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import logger from "../logger/winston.logger.js";
 import { ApiError } from "../utils/ApiError.js";
+import { config } from "../config/index.js";
 
 /**
  * Error handling middleware for catching errors.
@@ -30,9 +31,7 @@ const errorHandler = (
 	// Prepare the response
 	const response = {
 		message: apiError.message,
-		...(process.env.NODE_ENV === "development"
-			? { stack: apiError.stack }
-			: {}),
+		...(config.nodeEnv === "development" ? { stack: apiError.stack } : {}),
 		statusCode: apiError.statusCode,
 		errors: apiError.errors || [],
 	};

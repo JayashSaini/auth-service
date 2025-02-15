@@ -16,6 +16,7 @@ import { CookieOptions } from "express";
 import { verifyUserStatus } from "../schemas/user.schemas.js";
 import { sessionService } from "../service/session.service.js";
 import { ipBlockService } from "../service/ipBlock.service.js";
+import { config } from "../config/index.js";
 // import { sendMail } from "../service/mailgun.service.js";
 
 /**
@@ -30,9 +31,9 @@ import { ipBlockService } from "../service/ipBlock.service.js";
 
 // cookie configuration
 const cookieOptions: CookieOptions = {
-	maxAge: convertToMilliseconds(process.env.REFRESH_TOKEN_EXPIRY),
+	maxAge: convertToMilliseconds(config.refreshToken.expiry),
 	httpOnly: true, // Cookie is only accessible via HTTP(S) and not client-side JavaScript
-	secure: process.env.NODE_ENV === "production", // Cookie will only be sent over HTTPS if in production
+	secure: config.nodeEnv === "production", // Cookie will only be sent over HTTPS if in production
 	sameSite: "strict", // SameSite attribute to prevent CSRF attacks
 };
 
@@ -72,6 +73,7 @@ const registerHandler = asyncHandler(async (req, res) => {
 
 	// - Create a new user in the database.
 	// - Store user data in the database (ensure everything is perfect).
+
 	const newUser = await prisma.user.create({
 		data: {
 			username,
@@ -167,7 +169,7 @@ const loginHandler = asyncHandler(async (req, res) => {
 		res.cookie("refreshToken", refreshToken, cookieOptions);
 		res.cookie("accessToken", accessToken, {
 			...cookieOptions,
-			maxAge: convertToMilliseconds(process.env.ACCESS_TOKEN_EXPIRY),
+			maxAge: convertToMilliseconds(config.accessToken.expiry),
 		});
 
 		// Create new session
@@ -220,7 +222,7 @@ const refreshAccessTokenHandler = asyncHandler(async (req, res) => {
 		// Set the access token expiry time to 1 hour and the refresh token expiry time to 15 days.
 		res.cookie("accessToken", accessToken, {
 			...cookieOptions,
-			maxAge: convertToMilliseconds(process.env.ACCESS_TOKEN_EXPIRY),
+			maxAge: convertToMilliseconds(config.accessToken.expiry),
 		});
 
 		res.cookie("refreshToken", refreshToken, cookieOptions);

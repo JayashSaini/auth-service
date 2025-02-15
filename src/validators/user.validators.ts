@@ -10,6 +10,7 @@ import { formatDateWithoutTimezone } from "../utils/generalUtils.js";
 import { LoginTypeEnum, StatusEnum, UserRolesEnum } from "../constants.js";
 import { Status, User } from "@prisma/client";
 import jwt from "jsonwebtoken";
+import { config } from "../config/index.js";
 
 /**
  * Check user status and lock status
@@ -181,7 +182,7 @@ const refreshAccessTokenValidator = asyncHandler(async (req, _, next) => {
 	try {
 		decodedToken = jwt.verify(
 			refreshToken,
-			process.env.REFRESH_TOKEN_SECRET as string
+			config.refreshToken.secret as string
 		) as jwt.JwtPayload;
 	} catch (error) {
 		if (error instanceof jwt.TokenExpiredError) {

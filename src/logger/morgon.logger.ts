@@ -1,5 +1,6 @@
 import morgan from "morgan";
 import logger from "./winston.logger.js";
+import { config } from "../config/index.js";
 
 const stream = {
 	// Use the http severity
@@ -7,7 +8,7 @@ const stream = {
 };
 
 const skip = () => {
-	const env = process.env.NODE_ENV || "development";
+	const env = config.nodeEnv || "development";
 	return env !== "development";
 };
 

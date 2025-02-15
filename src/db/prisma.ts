@@ -1,11 +1,12 @@
 // src/db/prisma.ts
 import { PrismaClient } from "@prisma/client";
 import logger from "../logger/winston.logger.js";
+import { config } from "../config/index.js";
 
 // Singleton pattern to avoid multiple instances of PrismaClient
 let prisma: PrismaClient;
 
-if (process.env.NODE_ENV === "production") {
+if (config.nodeEnv === "production") {
 	prisma = new PrismaClient();
 } else {
 	// In development mode, use a global variable to avoid creating multiple instances

@@ -1,16 +1,13 @@
-import dotenv from "dotenv";
-dotenv.config({
-	path: ".env",
-});
-
+import { config } from "./config/index.js";
 import { connectPrisma, disconnectPrisma } from "./db/prisma.js";
 import { app } from "./app.js";
 
 import logger from "./logger/winston.logger.js";
 import { Server } from "http";
+import { kafkaProducer } from "./config/kafka.config.js";
 
-const PORT = process.env.PORT || 8000;
-const HOST = process.env.HOST || "0.0.0.0";
+const PORT = config.port || 8000;
+const HOST = config.host || "0.0.0.0";
 
 let server: Server | null = null;
 
@@ -42,6 +39,8 @@ async function stopServer(): Promise<void> {
 
 		// Disconnect from the database
 		await disconnectPrisma();
+		await kafkaProducer.disconnect();
+
 		logger.info("✅ Server is shutting down...");
 	} catch (error) {
 		logger.error("Error stopping the server: ", error);
@@ -57,6 +56,9 @@ async function startServer(): Promise<void> {
 	try {
 		// Connect to the database
 		await connectPrisma();
+
+		// Connect to the Kafka server
+		await kafkaProducer.connect();
 
 		// Start the application
 		await startApp();

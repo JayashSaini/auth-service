@@ -8,6 +8,7 @@ import morganMiddleware from "./logger/morgon.logger.js";
 import swaggerUi from "swagger-ui-express";
 import { specs } from "./docs/swagger.js";
 import { ipBlockService } from "./service/ipBlock.service.js";
+import { config } from "./config/index.js";
 
 const app = express();
 
@@ -24,8 +25,7 @@ declare global {
 
 // Separate middleware configuration
 const corsOptions: cors.CorsOptions = {
-	origin:
-		process.env.CORS_ORIGIN === "*" ? "*" : process.env.CORS_ORIGIN.split(","),
+	origin: config.corsOrigin === "*" ? "*" : config.corsOrigin.split(","),
 	credentials: true,
 };
 

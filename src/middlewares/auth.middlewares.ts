@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import { User } from "@prisma/client"; // Prisma User type
 import { NextFunction, Request, Response } from "express";
 import { AvailableUserRoles, UserRolesEnum } from "../constants.js";
+import { config } from "../config/index.js";
 
 /**
  * Middleware to verify JWT
@@ -22,7 +23,7 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
 	try {
 		const decodedToken = jwt.verify(
 			token,
-			process.env.ACCESS_TOKEN_SECRET as string
+			config.accessToken.secret as string
 		) as jwt.JwtPayload;
 		const user: User | null = await prisma.user.findUnique({
 			where: { id: decodedToken?.id },
@@ -62,7 +63,7 @@ export const getLoggedInUserOrIgnore = asyncHandler(async (req, res, next) => {
 	try {
 		const decodedToken = jwt.verify(
 			token,
-			process.env.ACCESS_TOKEN_SECRET as string
+			config.accessToken.secret as string
 		) as jwt.JwtPayload;
 		const user = await prisma.user.findUnique({
 			where: { id: decodedToken?.id },
