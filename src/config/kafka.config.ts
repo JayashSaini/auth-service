@@ -1,6 +1,7 @@
 import { Kafka, Partitioners, Producer } from "kafkajs";
 import { config } from "./index.js";
 import logger from "../logger/winston.logger.js";
+import { Email } from "../types/index.js";
 
 class KafkaProducer {
 	private producer: Producer;
@@ -33,7 +34,7 @@ class KafkaProducer {
 		}
 	}
 
-	async sendMessage(topic: string, message: any): Promise<void> {
+	async sendMessage(topic: string, message: Email): Promise<void> {
 		try {
 			await this.producer.send({
 				topic,

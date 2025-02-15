@@ -15,3 +15,10 @@ export interface RateLimitConfig {
 	max: number;
 	message: string;
 }
+
+export interface Email {
+	to: string;
+	subject: string;
+	templateId: string;
+	data: {};
+}

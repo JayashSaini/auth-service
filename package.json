@@ -9,7 +9,10 @@
 		"start": "NODE_ENV=production node dist/index.js",
 		"postbuild": "node ./scripts/js-extensions.scripts.js",
 		"watch": "NODE_ENV=development tsc --watch",
-		"dev": "NODE_ENV=development concurrently \"npm run watch\" \"nodemon dist/index.js\" --delay 1"
+		"dev": "NODE_ENV=development concurrently \"npm run watch\" \"nodemon dist/index.js\" --delay 1",
+		"prisma:studio": "dotenv -e .env.development -- npx prisma studio",
+		"prisma:generate": "dotenv -e .env.development -- npx prisma generate",
+		"prisma:migrate": "dotenv -e .env.development -- npx prisma migrate deploy"
 	},
 	"author": "jayash saini",
 	"license": "ISC",
@@ -24,6 +27,8 @@
 		"@types/request-ip": "^0.0.41",
 		"@types/swagger-jsdoc": "^6.0.4",
 		"@types/swagger-ui-express": "^4.1.7",
+		"cross-env": "^7.0.3",
+		"dotenv-cli": "^8.0.0",
 		"prisma": "^6.2.1",
 		"ts-node": "^10.9.2",
 		"tsconfig-paths": "^4.2.0",

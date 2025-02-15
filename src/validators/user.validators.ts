@@ -11,6 +11,9 @@ import { LoginTypeEnum, StatusEnum, UserRolesEnum } from "../constants.js";
 import { Status, User } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { config } from "../config/index.js";
+import { generateEmailVerificationToken } from "../service/user.service.js";
+import { sendMail } from "../service/message.service.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
 
 /**
  * Check user status and lock status
@@ -82,7 +85,7 @@ const validateUserStatus = async (user: User) => {
  * @function registerValidator
  * @description Handles data validation of registration user.
  */
-const registerValidator = asyncHandler(async (req, _, next) => {
+const registerValidator = asyncHandler(async (req, res, next) => {
 	// Step 1: Validate incoming user data (email, username, password).
 	const parsedData = registerSchema.parse(req.body); // Using Zod schema to validate request data
 
@@ -100,10 +103,7 @@ const registerValidator = asyncHandler(async (req, _, next) => {
 			// Check if email already exists in the database and is verified
 			if (existingUser.email === parsedData.email) {
 				// If email is verified and already exists, throw an error
-				throw new ApiError(
-					400,
-					"Email is already registered, please verify your email."
-				);
+				throw new ApiError(400, "Email is already registered and verified.");
 			}
 
 			// Check if the username already exists in the database
@@ -112,6 +112,55 @@ const registerValidator = asyncHandler(async (req, _, next) => {
 				throw new ApiError(400, "Username is already taken.");
 			}
 		}
+
+		// Check if the verification token is still valid
+		const now = new Date();
+		if (
+			existingUser.emailVerificationExpiry &&
+			existingUser.emailVerificationExpiry > now
+		) {
+			throw new ApiError(
+				400,
+				"Verification email already sent. Please check your inbox."
+			);
+		}
+
+		// If token is expired, generate a new one and update the user record
+		const { emailVerificationToken, emailVerificationExpiry } =
+			generateEmailVerificationToken(parsedData.email);
+
+		const isMailSent = sendMail({
+			to: parsedData.email,
+			subject: "Verify your email address",
+			templateId: "emailVerificationTemplate",
+			data: {
+				username: existingUser.username,
+				emailVerificationToken,
+			},
+		});
+
+		if (!isMailSent) {
+			throw new ApiError(500, "Failed to resend verification email.");
+		}
+
+		// Update user record with new verification token and expiry time
+		await prisma.user.update({
+			where: { email: parsedData.email },
+			data: {
+				emailVerificationToken,
+				emailVerificationExpiry,
+			},
+		});
+
+		return res
+			.status(200)
+			.json(
+				new ApiResponse(
+					200,
+					{},
+					"Verification email expired. A new verification email has been sent."
+				)
+			);
 	}
 
 	// Step 4: If no issues with email or username, move to the next middleware

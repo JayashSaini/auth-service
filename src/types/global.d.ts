@@ -23,6 +23,11 @@ declare global {
 			EMAIL_VERIFICATION_TOKEN_EXPIRY: string;
 
 			MAILGUN_API_KEY: string;
+
+			KAFKA_CLIENT_ID: string;
+			KAFKA_BROKERS: string;
+			KAFKA_GROUP_ID: string;
+			KAFKA_EMAIL_TOPIC: string;
 		}
 	}
 }

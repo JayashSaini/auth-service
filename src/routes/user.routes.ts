@@ -80,7 +80,7 @@ const router = Router();
  */
 router.use(checkIpBlock);
 router.use(apiLimiter);
-router.route("/register").post(authLimiter, registerValidator, registerHandler);
+router.route("/register").post(registerValidator, registerHandler);
 
 /**
  * @swagger

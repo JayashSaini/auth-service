@@ -17,6 +17,7 @@ import { verifyUserStatus } from "../schemas/user.schemas.js";
 import { sessionService } from "../service/session.service.js";
 import { ipBlockService } from "../service/ipBlock.service.js";
 import { config } from "../config/index.js";
+import { sendMail } from "../service/message.service.js";
 // import { sendMail } from "../service/mailgun.service.js";
 
 /**
@@ -45,59 +46,51 @@ const cookieOptions: CookieOptions = {
 const registerHandler = asyncHandler(async (req, res) => {
 	const { username, email, password } = req.body;
 
-	// Hash the password before saving it.
+	// Hash the password before saving it
 	const hashedPassword = await hashPassword(password);
 
-	// Generating Verification Token:
+	// Generate email verification token
 	const { emailVerificationToken, emailVerificationExpiry } =
 		generateEmailVerificationToken(email);
 
-	// - Send email verification link to the user.
-	// TODO: Firstly implement email service then use it
-	// const isMailSent = await sendMail({
-	// 	to: email,
-	// 	subject: "Verify your email address",
-	// 	text: `Please verify your email by clicking this link: http://localhost:3000/verify-email/${emailVerificationToken}`,
-	// 	html: `Please verify your email by clicking this link: <a href="http://localhost:3000/verify-email/${emailVerificationToken}">http://localhost:3000/verify-email/${emailVerificationToken}</a>`,
-	// });
+	// Send email verification link
+	const isMailSent = sendMail({
+		to: email,
+		subject: "Verify your email address",
+		templateId: "emailVerificationTemplate",
+		data: {
+			username,
+			emailVerificationToken,
+		},
+	});
 
-	// - If sending email fails:
-	//   - Handle the error and stop the process.
-	// if (!isMailSent) {
-	// 	//   - Provide a clear response and rollback changes if necessary.
-	// 	throw new ApiError(
-	// 		500,
-	// 		"Failed to send email verification link.  Please Send it again."
-	// 	);
-	// }
+	if (!isMailSent) {
+		throw new ApiError(500, "Failed to send email verification link.");
+	}
 
-	// - Create a new user in the database.
-	// - Store user data in the database (ensure everything is perfect).
-
+	// Create a new user in the database
 	const newUser = await prisma.user.create({
 		data: {
 			username,
 			email,
 			password: hashedPassword,
-			// emailVerificationToken,
-			// emailVerificationExpiry,
-			isEmailVerified: true, // Set email verification status to false initially
+			emailVerificationToken,
+			emailVerificationExpiry,
 			loginType: LoginTypeEnum.ID_PASSWORD,
 		},
 	});
 
 	if (!newUser) {
-		throw new ApiError(500, "Failed to register user.  Please try again.");
+		throw new ApiError(500, "Failed to register user. Please try again.");
 	}
 
-	// - Return a success response with user data.
 	return res
 		.status(201)
 		.json(
 			new ApiResponse(
 				201,
 				{},
-				"Your registration was successful! Please check your inbox (and spam folder) for verification"
+				"Your registration was successful! Please check your email for verification."
 			)
 		);
 });
