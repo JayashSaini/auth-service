@@ -27,7 +27,7 @@ class KafkaProducer {
 	async connect(): Promise<void> {
 		try {
 			await this.producer.connect();
-			logger.info("Successfully connected to Kafka producer");
+			logger.info("✅ Successfully connected to the Kafka producer");
 		} catch (error) {
 			logger.error("Failed to connect to Kafka producer:", error);
 			throw error;

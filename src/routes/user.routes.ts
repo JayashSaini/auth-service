@@ -9,9 +9,13 @@ import {
 	registerHandler,
 	setUserStatusHandler,
 	twoFactorAuthHandler,
-	getUserSessionsHandler,
-	terminateSessionHandler,
-	terminateAllSessionsHandler,
+	verifyEmailHandler,
+	verify2FAHandler,
+	changePasswordRequestHandler,
+	changePasswordHandler,
+	forgotPasswordRequestHandler,
+	forgotPasswordHandler,
+	resendVerifyEmailHandler,
 } from "../controllers/user.controllers.js";
 import {
 	loginValidator,
@@ -28,7 +32,6 @@ import {
 	checkIpBlock,
 	authLimiter,
 	apiLimiter,
-	sessionLimiter,
 } from "../middlewares/security.middlewares.js";
 const router = Router();
 
@@ -124,6 +127,12 @@ router
 	.route("/refresh-access-token")
 	.post(refreshAccessTokenValidator, refreshAccessTokenHandler);
 
+router.route("/verify-email/:token").post(verifyEmailHandler);
+router.route("/resend-verify-email").post(resendVerifyEmailHandler);
+router.route("/2fa/:token").post(verify2FAHandler);
+router.route("/forgot-password-request").post(forgotPasswordRequestHandler);
+router.route("/forgot-password/:token").post(forgotPasswordHandler);
+
 // authenticated routes starts from here
 router.use(verifyJWT);
 
@@ -156,6 +165,8 @@ router
 		setUserStatusHandler
 	);
 
+router.route("/change-password-request").post(changePasswordRequestHandler);
+router.route("/change-password/:token").post(changePasswordHandler);
 /**
  * @swagger
  * /user/sessions:
@@ -185,7 +196,6 @@ router
  *       200:
  *         description: All sessions terminated
  */
-router.get("/sessions", sessionLimiter, getUserSessionsHandler);
 
 /**
  * @swagger
@@ -207,9 +217,6 @@ router.get("/sessions", sessionLimiter, getUserSessionsHandler);
  *       403:
  *         description: Unauthorized to terminate session
  */
-router.delete("/sessions/:sessionId", sessionLimiter, terminateSessionHandler);
-
-router.delete("/sessions", sessionLimiter, terminateAllSessionsHandler);
 
 /**
  * @swagger

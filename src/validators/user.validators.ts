@@ -8,7 +8,7 @@ import { prisma } from "../db/index.js";
 import { ApiError } from "../utils/ApiError.js";
 import { formatDateWithoutTimezone } from "../utils/generalUtils.js";
 import { LoginTypeEnum, StatusEnum, UserRolesEnum } from "../constants.js";
-import { Status, User } from "@prisma/client";
+import { Status, User, UserSession } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { config } from "../config/index.js";
 import { generateEmailVerificationToken } from "../service/user.service.js";
@@ -127,7 +127,7 @@ const registerValidator = asyncHandler(async (req, res, next) => {
 
 		// If token is expired, generate a new one and update the user record
 		const { emailVerificationToken, emailVerificationExpiry } =
-			generateEmailVerificationToken(parsedData.email);
+			generateEmailVerificationToken();
 
 		const isMailSent = sendMail({
 			to: parsedData.email,
@@ -207,7 +207,7 @@ const loginValidator = asyncHandler(async (req, _, next) => {
 	}
 
 	// - If all checks pass, continue to the next middleware or handler.
-	req.user = user;
+	req.fullUser = user;
 
 	next();
 });
@@ -251,23 +251,33 @@ const refreshAccessTokenValidator = asyncHandler(async (req, _, next) => {
 
 	// If the refresh token is valid, retrieve the corresponding user from the database.
 	// Retrieve user details from the database using the refresh token.
+	const userSession: UserSession | null = await prisma.userSession.findFirst({
+		where: {
+			userId: decodedToken.id,
+			refreshToken: refreshToken,
+			isValid: true,
+		},
+	});
+
 	const user: User | null = await prisma.user.findUnique({
 		where: {
 			id: decodedToken.id,
 		},
 	});
 
-	// If the user does not exist, throw an error.
 	if (!user) {
 		throw new ApiError(404, "User not found.");
 	}
+	// If the user does not exist, throw an error.
+	if (!userSession) {
+		throw new ApiError(404, "User Session not found.");
+	}
 
-	// Verify the user's status: Only allow login if the status is ACTIVE.
+	req.body.userSession = userSession;
+
 	await validateUserStatus(user);
 
-	// set user to req object
-	req.user = user;
-
+	req.fullUser = user;
 	// - If all checks pass, continue to the next middleware or handler.
 	next();
 });

@@ -24,9 +24,10 @@ export const config = {
 	},
 
 	emailVerificationToken: {
-		secret: process.env.EMAIL_VERIFICATION_TOKEN_SECRET || "default_secret",
-		expiry: process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || "30m",
+		expiry: parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY) || 30,
 	},
+
+	passwordToken: parseInt(process.env.PASSWORD_TOKEN_EXPIRY) || 10,
 
 	mailgun: {
 		apiKey: process.env.MAILGUN_API_KEY || "",

@@ -54,6 +54,7 @@
 		"swagger-ui-express": "^5.0.1",
 		"ts-node-dev": "^2.0.0",
 		"ua-parser-js": "^2.0.0",
+		"uuid": "^11.0.5",
 		"winston": "^3.17.0",
 		"zod": "^3.24.1"
 	}

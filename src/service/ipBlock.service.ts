@@ -1,7 +1,7 @@
 import { prisma } from "../db/index.js";
 import { ApiError } from "../utils/ApiError.js";
 import { RATE_LIMIT_CONFIG } from "../constants.js";
-import { BlockedIPData, UserWithAuth } from "../types/index.js";
+import { UserWithAuth } from "../types/index.js";
 
 export const ipBlockService = {
 	async isIpBlocked(ip: string): Promise<boolean> {

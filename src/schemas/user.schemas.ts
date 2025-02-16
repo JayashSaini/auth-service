@@ -73,3 +73,55 @@ export const verifyUserStatus = z.object({
 		}
 	),
 });
+
+export const changePasswordValidator = z.object({
+	// Validate email with proper format and trim whitespace
+	newPassword: z
+		.string({
+			required_error: "Password is required",
+			invalid_type_error: "Password must be a string",
+		})
+		.trim()
+		.min(8, "Password must be at least 8 characters")
+		.max(25, "Password cannot be more than 25 characters long."),
+	// Validate password with min/max length and clearer error messages
+	oldPassword: z
+		.string({
+			required_error: "Password is required",
+			invalid_type_error: "Password must be a string",
+		})
+		.trim()
+		.min(8, "Password must be at least 8 characters")
+		.max(25, "Password cannot be more than 25 characters long."),
+});
+
+export const forgotPasswordValidator = z.object({
+	newPassword: z
+		.string({
+			required_error: "Password is required",
+			invalid_type_error: "Password must be a string",
+		})
+		.trim()
+		.min(8, "Password must be at least 8 characters")
+		.max(25, "Password cannot be more than 25 characters long."),
+	// Validate password with min/max length and clearer error messages
+	confirmPassword: z
+		.string({
+			required_error: "Password is required",
+			invalid_type_error: "Password must be a string",
+		})
+		.trim()
+		.min(8, "Password must be at least 8 characters")
+		.max(25, "Password cannot be more than 25 characters long."),
+});
+
+export const emailValidator = z.object({
+	// Validate email with proper format and trim whitespace
+	email: z
+		.string({
+			required_error: "Email is required",
+			invalid_type_error: "Email must be a string",
+		})
+		.trim()
+		.email("Please provide a valid email address."),
+});

@@ -1,4 +1,4 @@
-import { User } from "@prisma/client";
+import { Role, Status, User } from "@prisma/client";
 
 export interface BlockedIPData {
 	ip: string;
@@ -21,4 +21,12 @@ export interface Email {
 	subject: string;
 	templateId: string;
 	data: {};
+}
+
+export interface authPayload {
+	id: number;
+	email: string;
+	status: Status;
+	role: Role;
+	sessionId: string;
 }

@@ -19,7 +19,6 @@ model User {
   email                   String    @unique
   username                String
   password                String
-  refreshToken            String    @default("")
   isEmailVerified         Boolean   @default(false)
   role                    Role      @default(USER)
   loginType               LoginType    @default(ID_PASSWORD)
@@ -31,7 +30,6 @@ model User {
   accountLockedUntil      DateTime?
   status                  Status    @default(ACTIVE)
   twoFactorAuthEnabled    Boolean   @default(false)
-  lastLogin               DateTime?
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   sessions                UserSession[]
@@ -55,6 +53,24 @@ model UserSession {
   @@index([userId])
 }
 
+
+model BlockedIP {
+  ip           String   @id
+  blockedUntil DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model FailedAttempt {
+  id        Int      @id @default(autoincrement())
+  ip        String
+  createdAt DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([ip, createdAt])
+}
+
+
+
 enum Role {
   USER
   ADMIN
@@ -71,21 +87,6 @@ enum Status {
 enum LoginType {
   ID_PASSWORD
   GOOGLE
-}
-
-model BlockedIP {
-  ip           String   @id
-  blockedUntil DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
-model FailedAttempt {
-  id        Int      @id @default(autoincrement())
-  ip        String
-  createdAt DateTime @default(now())
-
-  @@index([ip, createdAt])
 }
 
 

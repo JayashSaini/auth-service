@@ -19,8 +19,8 @@ declare global {
 			REFRESH_TOKEN_SECRET: string;
 			REFRESH_TOKEN_EXPIRY: string;
 
-			EMAIL_VERIFICATION_TOKEN_SECRET: string;
 			EMAIL_VERIFICATION_TOKEN_EXPIRY: string;
+			PASSWORD_TOKEN_EXPIRY: string;
 
 			MAILGUN_API_KEY: string;
 

@@ -36,7 +36,7 @@ app.use(requestIp.mw());
 // Rate limiter to avoid misuse of the service and avoid cost spikes
 const limiter = rateLimit({
 	windowMs: 60 * 1000, // 1 minute
-	max: 500, // Limit each IP to 500 requests per minute
+	max: 100, // Limit each IP to 100 requests per minute
 	standardHeaders: true,
 	legacyHeaders: false,
 	keyGenerator: (req: Request) => req.clientIp || "unknown-ip",
@@ -76,9 +76,11 @@ app.use(morganMiddleware);
 
 import { errorHandler } from "./middlewares/error.middlewares.js";
 import userRouter from "./routes/user.routes.js";
+import sessionRouter from "./routes/session.routes.js";
 import { ApiResponse } from "./utils/ApiResponse.js";
 
 app.use("/api/v1/user", userRouter);
+app.use("/api/v1/session", sessionRouter);
 app.get("/api/v1/healthcheck", (req, res) => {
 	res.status(200).json(new ApiResponse(200, {}, "Server is running"));
 });

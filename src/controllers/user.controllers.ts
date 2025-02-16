@@ -6,19 +6,25 @@ import {
 	hashPassword,
 	generateEmailVerificationToken,
 	comparePassword,
-	generateTokens,
-	handleFailedLoginAttempts,
 	convertToMilliseconds,
+	generatePasswordToken,
+	generateAccessToken,
+	generateRefreshToken,
 } from "../service/user.service.js";
 import { LoginTypeEnum, UserRolesEnum } from "../constants.js";
 import { User, Status } from "@prisma/client";
 import { CookieOptions } from "express";
-import { verifyUserStatus } from "../schemas/user.schemas.js";
+import {
+	changePasswordValidator,
+	emailValidator,
+	forgotPasswordValidator,
+	verifyUserStatus,
+} from "../schemas/user.schemas.js";
 import { sessionService } from "../service/session.service.js";
 import { ipBlockService } from "../service/ipBlock.service.js";
 import { config } from "../config/index.js";
 import { sendMail } from "../service/message.service.js";
-// import { sendMail } from "../service/mailgun.service.js";
+import { authPayload } from "../types/index.js";
 
 /**
  * Authentication Route Handlers
@@ -51,7 +57,7 @@ const registerHandler = asyncHandler(async (req, res) => {
 
 	// Generate email verification token
 	const { emailVerificationToken, emailVerificationExpiry } =
-		generateEmailVerificationToken(email);
+		generateEmailVerificationToken();
 
 	// Send email verification link
 	const isMailSent = sendMail({
@@ -114,21 +120,9 @@ const loginHandler = asyncHandler(async (req, res) => {
 			);
 		}
 
-		// Fetch the user
-		const user = await prisma.user.findUnique({
-			where: { email },
-		});
-
+		const user = req.fullUser;
 		if (!user) {
-			throw new ApiError(404, "User not found");
-		}
-
-		// Check if account is locked
-		if (user.accountLockedUntil && user.accountLockedUntil > new Date()) {
-			throw new ApiError(
-				403,
-				`Account locked. Please try again after ${user.accountLockedUntil.toLocaleString()}`
-			);
+			throw new ApiError(401, "Invalid credentials");
 		}
 
 		// Verify password
@@ -136,47 +130,77 @@ const loginHandler = asyncHandler(async (req, res) => {
 
 		if (!isPasswordValid) {
 			await ipBlockService.handleFailedLogin(user, clientIp ?? "");
-			throw new ApiError(401, "Invalid credentials");
+			throw new ApiError(401, "Incorrect password");
 		}
 
 		// Check if Two-Factor Authentication (2FA) is enabled
 		if (user.twoFactorAuthEnabled) {
-			// TODO: Send OTP for verification
-			// You will need to handle OTP generation, storage, and validation separately.
-			return res.status(200).json(new ApiResponse(200, "OTP sent for 2FA"));
+			// If token is expired, generate a new one and update the user record
+			const { emailVerificationToken, emailVerificationExpiry } =
+				generateEmailVerificationToken();
+
+			const isMailSent = sendMail({
+				to: user.email,
+				subject: "2FA Authentication Email",
+				templateId: "twoFATemplate",
+				data: {
+					username: user.username,
+					emailVerificationToken,
+				},
+			});
+
+			if (!isMailSent) {
+				throw new ApiError(500, "Failed to send verification email.");
+			}
+
+			// Update user record with new verification token and expiry time
+			await prisma.user.update({
+				where: { email: email },
+				data: {
+					emailVerificationToken,
+					emailVerificationExpiry,
+				},
+			});
+
+			return res
+				.status(200)
+				.json(new ApiResponse(200, {}, "Verification email has been sent."));
 		}
 
 		// Proceed to generate tokens and update the user's record in the database
 
-		// First invalidate any existing sessions
-		await prisma.userSession.updateMany({
-			where: {
-				userId: user.id,
-				isValid: true,
-			},
-			data: { isValid: false },
-		});
-
-		const { accessToken, refreshToken } = await generateTokens(user);
-
-		res.cookie("refreshToken", refreshToken, cookieOptions);
-		res.cookie("accessToken", accessToken, {
-			...cookieOptions,
-			maxAge: convertToMilliseconds(config.accessToken.expiry),
-		});
+		// generate refresh token
+		const refreshToken = generateRefreshToken({ id: user.id });
 
 		// Create new session
-		await sessionService.createSession(user.id, req);
+		const session = await sessionService.createSession(
+			user.id,
+			refreshToken,
+			req
+		);
+
+		// generate access token
+		const accessToken = generateAccessToken({
+			id: user.id,
+			email: user.email,
+			status: user.status,
+			role: user.role,
+			sessionId: session.id,
+		});
 
 		// Store the refresh token, reset failed login attempts, and update last login
 		const updatedUser = await prisma.user.update({
 			where: { id: user.id },
 			data: {
-				refreshToken: refreshToken,
 				failedLoginAttempts: 0, // Reset failed login attempts
-				lastLogin: new Date(), // Update last login timestamp
 				accountLockedUntil: null,
 			},
+		});
+
+		res.cookie("refreshToken", refreshToken, cookieOptions);
+		res.cookie("accessToken", accessToken, {
+			...cookieOptions,
+			maxAge: convertToMilliseconds(config.accessToken.expiry),
 		});
 
 		return res
@@ -201,44 +225,161 @@ const loginHandler = asyncHandler(async (req, res) => {
 const refreshAccessTokenHandler = asyncHandler(async (req, res) => {
 	// 	Generate Tokens:
 	// Create a new access token and refresh token for the user.
-	const user: User | undefined | null = req.user;
+	const user: User | undefined | null = req.fullUser;
+	const { userSession } = req.body;
+
+	if (!userSession) {
+		throw new ApiError(400, "Invalid request body");
+	}
 
 	if (!user) {
 		throw new ApiError(404, "User not found");
 	}
 
 	// Start a transaction
-	const transaction = await prisma.$transaction(async (prisma) => {
-		// Create a new access token and refresh token for the user.
-		const { accessToken, refreshToken } = await generateTokens(user);
 
-		// Set the access token expiry time to 1 hour and the refresh token expiry time to 15 days.
-		res.cookie("accessToken", accessToken, {
-			...cookieOptions,
-			maxAge: convertToMilliseconds(config.accessToken.expiry),
-		});
+	// Create a new access token and refresh token for the user.
+	const refreshToken = generateRefreshToken({ id: user.id });
 
-		res.cookie("refreshToken", refreshToken, cookieOptions);
+	// Create new session
+	const session = await sessionService.updateSessionPeriod(
+		userSession.id,
+		refreshToken
+	);
 
-		// Store the refresh token in the database
-		await prisma.user.update({
-			where: { id: user.id },
-			data: {
-				refreshToken,
-			},
-		});
-
-		// Return the tokens and user information
-		return { accessToken, refreshToken, user };
+	// generate access token
+	const accessToken = generateAccessToken({
+		id: user.id,
+		email: user.email,
+		status: user.status,
+		role: user.role,
+		sessionId: session.id,
 	});
 
+	// Set the access token expiry time to 1 hour and the refresh token expiry time to 15 days.
+	res.cookie("accessToken", accessToken, {
+		...cookieOptions,
+		maxAge: convertToMilliseconds(config.accessToken.expiry),
+	});
+
+	res.cookie("refreshToken", refreshToken, cookieOptions);
+
 	// Handle any errors during database operations (e.g., if inserting the refresh token fails).
-	// If any operation fails, rollback any changes to maintain consistency.
 
 	// Provide a clear response with the error message to the user.
 	res
 		.status(200)
-		.json(new ApiResponse(200, transaction, "Token Refreshed Successfully"));
+		.json(
+			new ApiResponse(
+				200,
+				{ accessToken, refreshToken, user },
+				"Token Refreshed Successfully"
+			)
+		);
+});
+
+/**
+ * Verify email after user's registration
+ * @function verifyEmailHandler
+ * @description Verify email after user's registration.
+ */
+const verifyEmailHandler = asyncHandler(async (req, res) => {
+	const { token } = req.params;
+
+	if (!token) {
+		throw new ApiError(400, "Email verification token is missing");
+	}
+
+	// Find user by token & check if not expired
+	const user = await prisma.user.findFirst({
+		where: {
+			emailVerificationToken: token,
+			emailVerificationExpiry: { gte: new Date() }, // Fix: Use `new Date()`
+		},
+	});
+
+	if (!user) {
+		throw new ApiError(400, "Invalid or expired token");
+	}
+
+	// Update user to mark as verified & remove token
+	await prisma.user.update({
+		where: { id: user.id },
+		data: {
+			isEmailVerified: true,
+			emailVerificationToken: null,
+			emailVerificationExpiry: null,
+		},
+	});
+
+	return res
+		.status(200)
+		.json(new ApiResponse(200, {}, "User verified successfully!"));
+});
+
+const verify2FAHandler = asyncHandler(async (req, res) => {
+	const { token } = req.params;
+
+	if (!token) {
+		throw new ApiError(400, "Email verification token is missing");
+	}
+
+	// Find user by token & check if not expired
+	const user = await prisma.user.findFirst({
+		where: {
+			emailVerificationToken: token,
+			emailVerificationExpiry: { gte: new Date() }, // Fix: Use `new Date()`
+		},
+	});
+
+	if (!user) {
+		throw new ApiError(400, "Invalid or expired token");
+	}
+
+	const refreshToken = generateRefreshToken({ id: user.id });
+
+	// Create new session
+	const session = await sessionService.createSession(
+		user.id,
+		refreshToken,
+		req
+	);
+
+	// generate access token
+	const accessToken = generateAccessToken({
+		id: user.id,
+		email: user.email,
+		status: user.status,
+		role: user.role,
+		sessionId: session.id,
+	});
+
+	// Store the refresh token, reset failed login attempts, and update last login
+	const updatedUser = await prisma.user.update({
+		where: { id: user.id },
+		data: {
+			failedLoginAttempts: 0, // Reset failed login attempt
+			accountLockedUntil: null,
+			emailVerificationToken: null,
+			emailVerificationExpiry: null,
+		},
+	});
+
+	res.cookie("refreshToken", refreshToken, cookieOptions);
+	res.cookie("accessToken", accessToken, {
+		...cookieOptions,
+		maxAge: convertToMilliseconds(config.accessToken.expiry),
+	});
+
+	return res
+		.status(200)
+		.json(
+			new ApiResponse(
+				200,
+				{ accessToken, refreshToken, user: updatedUser },
+				"User logged in successfully."
+			)
+		);
 });
 
 /**
@@ -246,21 +387,212 @@ const refreshAccessTokenHandler = asyncHandler(async (req, res) => {
  * @function forgotPasswordHandler
  * @description Processes forgot password requests by sending OTP to the user.
  */
-const forgotPasswordHandler = asyncHandler(async (req, res) => {});
+const forgotPasswordHandler = asyncHandler(async (req, res) => {
+	const { newPassword, confirmPassword } = req.body;
+	const { token } = req.params;
+
+	if (!token) {
+		throw new ApiError(400, "Password request token is required.");
+	}
+
+	forgotPasswordValidator.parse({ newPassword, confirmPassword });
+
+	if (newPassword !== confirmPassword) {
+		throw new ApiError(400, "New password and confirm password do not match.");
+	}
+
+	// Find user by token & check if not expired
+	const user = await prisma.user.findFirst({
+		where: {
+			resetPasswordToken: token,
+			resetPasswordExpiry: { gte: new Date() },
+		},
+	});
+
+	if (!user) {
+		throw new ApiError(400, "Password request is failed or expired");
+	}
+
+	// Hash the password before saving it
+	const hashedPassword = await hashPassword(newPassword);
+
+	const updatedUser = await prisma.user.update({
+		where: {
+			id: user.id,
+		},
+		data: {
+			password: hashedPassword,
+			resetPasswordExpiry: null,
+			resetPasswordToken: null,
+		},
+	});
+
+	return res
+		.status(200)
+		.json(
+			new ApiResponse(200, { user: updatedUser }, "Password reset successfully")
+		);
+});
 
 /**
- * Verify OTP for password reset or 2FA
- * @function verifyOtpHandler
- * @description Verifies the OTP provided for password reset or two-factor authentication.
+ * request for forgot password
+ * @function forgotPasswordRequestHandler
+ * @description it's send a mail for forgot password.
  */
-const verifyOtpHandler = asyncHandler(async (req, res) => {});
+const forgotPasswordRequestHandler = asyncHandler(async (req, res) => {
+	const { email } = req.body;
+
+	// email validator
+	emailValidator.parse({ email });
+
+	const user = await prisma.user.findFirst({ where: { email } });
+
+	if (!user) {
+		throw new ApiError(404, "User not found.");
+	}
+
+	const { passwordToken, passwordExpiry } = generatePasswordToken();
+
+	const isMailSent = sendMail({
+		to: user.email,
+		subject: "Forgot Password Request",
+		templateId: "forgotPasswordTemplate",
+		data: {
+			username: user.username,
+			passwordToken,
+		},
+	});
+
+	if (!isMailSent) {
+		throw new ApiError(500, "Failed to send verification email.");
+	}
+
+	// Update user record with new verification token and expiry time
+	await prisma.user.update({
+		where: { email: user.email },
+		data: {
+			resetPasswordExpiry: passwordExpiry,
+			resetPasswordToken: passwordToken,
+		},
+	});
+
+	return res
+		.status(200)
+		.json(
+			new ApiResponse(200, {}, "Forgot password request has been sent to mail.")
+		);
+});
 
 /**
  * Change the user's password
  * @function changePasswordHandler
  * @description Handles password change requests after verification of current password or OTP.
  */
-const changePasswordHandler = asyncHandler(async (req, res) => {});
+const changePasswordHandler = asyncHandler(async (req, res) => {
+	const { newPassword, oldPassword } = req.body;
+	const { token } = req.params;
+
+	changePasswordValidator.parse({ newPassword, oldPassword });
+
+	if (!token) {
+		throw new ApiError(400, "Password request token is required.");
+	}
+
+	// Find user by token & check if not expired
+	const user = await prisma.user.findFirst({
+		where: {
+			resetPasswordToken: token,
+			resetPasswordExpiry: { gte: new Date() },
+		},
+	});
+
+	if (!user) {
+		throw new ApiError(400, "Password request is failed or expired");
+	}
+
+	const isPasswordValid = comparePassword(oldPassword, user?.password);
+
+	if (!isPasswordValid) {
+		throw new ApiError(400, "Old password is incorrect");
+	}
+
+	// Hash the password before saving it
+	const hashedPassword = await hashPassword(newPassword);
+
+	const updatedUser = await prisma.user.update({
+		where: {
+			id: user.id,
+		},
+		data: {
+			password: hashedPassword,
+			resetPasswordExpiry: null,
+			resetPasswordToken: null,
+		},
+	});
+
+	return res
+		.status(200)
+		.json(
+			new ApiResponse(
+				200,
+				{ user: updatedUser },
+				"Password updated successfully"
+			)
+		);
+});
+
+/**
+ * Request for change the user's password
+ * @function changePasswordRequestHandler
+ * @description Send a email with token to verify user.
+ */
+const changePasswordRequestHandler = asyncHandler(async (req, res) => {
+	const authUser = req.user;
+
+	const user = await prisma.user.findUnique({
+		where: {
+			id: authUser?.id,
+		},
+	});
+	if (!user) {
+		throw new ApiError(404, "User not found");
+	}
+
+	const { passwordToken, passwordExpiry } = generatePasswordToken();
+
+	const isMailSent = sendMail({
+		to: user.email,
+		subject: "Change Password Request",
+		templateId: "changePasswordTemplate",
+		data: {
+			username: user.username,
+			passwordToken,
+		},
+	});
+
+	if (!isMailSent) {
+		throw new ApiError(500, "Failed to send verification email.");
+	}
+
+	// Update user record with new verification token and expiry time
+	await prisma.user.update({
+		where: { email: user.email },
+		data: {
+			resetPasswordExpiry: passwordExpiry,
+			resetPasswordToken: passwordToken,
+		},
+	});
+
+	return res
+		.status(200)
+		.json(
+			new ApiResponse(
+				200,
+				{},
+				"Change password request has been sent to  mail."
+			)
+		);
+});
 
 /**
  * Delete the user's account
@@ -270,7 +602,7 @@ const changePasswordHandler = asyncHandler(async (req, res) => {});
 
 const deleteAccountHandler = asyncHandler(async (req, res) => {
 	// Get the user from req.user and validate it.
-	const user: User | undefined | null = req.user;
+	const user: authPayload | undefined | null = req.user;
 	const { userId } = req.body;
 
 	if (!user) {
@@ -340,29 +672,12 @@ const logoutHandler = asyncHandler(async (req, res) => {
 	}
 
 	// Invalidate current session and clear cookies in a transaction
-	await prisma.$transaction(async (prisma) => {
-		// Invalidate the current session using the refresh token
-		await prisma.userSession.updateMany({
-			where: {
-				userId: user.id,
-				refreshToken: req.cookies.refreshToken,
-				isValid: true,
-			},
-			data: { isValid: false },
-		});
 
-		// Clear cookies and remove refresh token
-		res.clearCookie("accessToken");
-		res.clearCookie("refreshToken");
+	await sessionService.invalidateSession(user.sessionId);
 
-		await prisma.user.update({
-			where: { id: user.id },
-			data: {
-				refreshToken: "",
-				lastLogin: new Date(),
-			},
-		});
-	});
+	// Clear cookies and remove refresh token
+	res.clearCookie("accessToken");
+	res.clearCookie("refreshToken");
 
 	return res
 		.status(200)
@@ -384,13 +699,60 @@ const ssoHandler = asyncHandler(async (req, res) => {});
 const socialSignInCallbackHandler = asyncHandler(async (req, res) => {});
 
 /**
- * Resend OTP for verification
- * @function resendOtpHandler
- * @description Resends OTP to the user for verification purposes.
+ * Resend Email for verification
+ * @function resendVerifyEmailHandler
+ * @description Resends Email to the user for verification purposes.
  */
 
-// TODO: implement this after messaging service
-const resendOtpHandler = asyncHandler(async (req, res) => {});
+const resendVerifyEmailHandler = asyncHandler(async (req, res) => {
+	const { email } = req.body;
+
+	emailValidator.parse({ email });
+
+	const user = await prisma.user.findUnique({
+		where: { email },
+	});
+
+	if (!user) {
+		throw new ApiError(404, "User not found.");
+	}
+
+	if (user.isEmailVerified) {
+		throw new ApiError(400, "Email is already verified.");
+	}
+
+	// Generate email verification token
+	const { emailVerificationToken, emailVerificationExpiry } =
+		generateEmailVerificationToken();
+
+	// Send email verification link
+	const isMailSent = sendMail({
+		to: email,
+		subject: "Verify your email address",
+		templateId: "emailVerificationTemplate",
+		data: {
+			username: user.username,
+			emailVerificationToken,
+		},
+	});
+
+	if (!isMailSent) {
+		throw new ApiError(500, "Failed to send email verification link.");
+	}
+
+	// Create a new user in the database
+	await prisma.user.update({
+		where: { id: user.id },
+		data: {
+			emailVerificationToken,
+			emailVerificationExpiry,
+		},
+	});
+
+	return res
+		.status(200)
+		.json(new ApiResponse(200, {}, "Verification email resent successfully."));
+});
 
 /**
  * Enable or verify Two-Factor Authentication (2FA)
@@ -399,7 +761,11 @@ const resendOtpHandler = asyncHandler(async (req, res) => {});
  */
 const twoFactorAuthHandler = asyncHandler(async (req, res) => {
 	// Get the user from req.user and validate it.
-	const user: User | undefined | null = req.user;
+	const authUser: authPayload | undefined | null = req.user;
+
+	const user = await prisma.user.findUnique({
+		where: { id: authUser?.id },
+	});
 
 	if (!user) {
 		throw new ApiError(404, "User not found");
@@ -446,7 +812,14 @@ const setUserStatusHandler = asyncHandler(async (req, res) => {
 });
 
 const getSelfHandler = asyncHandler(async (req, res) => {
-	const user = req.user;
+	const authUser: authPayload | null | undefined = req.user;
+
+	const user = await prisma.user.findUnique({
+		where: {
+			id: authUser?.id,
+		},
+	});
+
 	if (!user) {
 		throw new ApiError(404, "User not found");
 	}
@@ -483,7 +856,6 @@ const getAllUsersHandler = asyncHandler(async (req, res) => {
 			createdAt: true,
 			updatedAt: true,
 			accountLockedUntil: true,
-			lastLogin: true,
 			isEmailVerified: true,
 			loginType: true,
 			twoFactorAuthEnabled: true,
@@ -500,87 +872,24 @@ const getAllUsersHandler = asyncHandler(async (req, res) => {
 		.json(new ApiResponse(200, { users }, "Users fetched successfully"));
 });
 
-const getUserSessionsHandler = asyncHandler(async (req, res) => {
-	const user = req.user;
-
-	if (!user) {
-		throw new ApiError(404, "User not found");
-	}
-
-	const sessions = await sessionService.getUserSessions(user.id);
-
-	return res
-		.status(200)
-		.json(
-			new ApiResponse(200, { sessions }, "Sessions retrieved successfully")
-		);
-});
-
-const terminateSessionHandler = asyncHandler(async (req, res) => {
-	const { sessionId } = req.params;
-	const user = req.user;
-
-	if (!user) {
-		throw new ApiError(404, "User not found");
-	}
-
-	const session = await prisma.userSession.findUnique({
-		where: { id: sessionId },
-	});
-
-	if (!session || session.userId !== user.id) {
-		throw new ApiError(403, "Unauthorized to terminate this session");
-	}
-
-	await sessionService.invalidateSession(sessionId);
-
-	return res
-		.status(200)
-		.json(new ApiResponse(200, {}, "Session terminated successfully"));
-});
-
-const terminateAllSessionsHandler = asyncHandler(async (req, res) => {
-	const user = req.user;
-
-	if (!user) {
-		throw new ApiError(404, "User not found");
-	}
-
-	await prisma.userSession.updateMany({
-		where: {
-			userId: user.id,
-			isValid: true,
-		},
-		data: { isValid: false },
-	});
-
-	// Clear current session cookies
-	res.clearCookie("accessToken");
-	res.clearCookie("refreshToken");
-
-	return res
-		.status(200)
-		.json(new ApiResponse(200, {}, "All sessions terminated successfully"));
-});
-
 export {
 	registerHandler,
 	loginHandler,
 	refreshAccessTokenHandler,
 	forgotPasswordHandler,
-	verifyOtpHandler,
+	forgotPasswordRequestHandler,
 	changePasswordHandler,
 	deleteAccountHandler,
 	setUserRoleHandler,
 	logoutHandler,
+	verifyEmailHandler,
+	verify2FAHandler,
+	changePasswordRequestHandler,
 	ssoHandler,
 	socialSignInCallbackHandler,
-	resendOtpHandler,
+	resendVerifyEmailHandler,
 	twoFactorAuthHandler,
 	setUserStatusHandler,
 	getSelfHandler,
 	getAllUsersHandler,
-	getUserSessionsHandler,
-	terminateSessionHandler,
-	terminateAllSessionsHandler,
 };

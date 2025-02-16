@@ -1,9 +1,10 @@
+import { UserSession } from "@prisma/client";
 import { prisma } from "../db/index.js";
 import { Request } from "express";
 import { UAParser } from "ua-parser-js";
 
 export const sessionService = {
-	async createSession(userId: number, req: Request) {
+	async createSession(userId: number, refreshToken: string, req: Request) {
 		const parser = new (UAParser as any)();
 		const deviceInfo = {
 			browser: parser.getBrowser().name,
@@ -16,7 +17,7 @@ export const sessionService = {
 				userId,
 				deviceInfo: JSON.stringify(deviceInfo),
 				ipAddress: req.ip ?? "0.0.0.0",
-				refreshToken: req.cookies.refreshToken,
+				refreshToken: refreshToken,
 			},
 		});
 	},
@@ -44,6 +45,15 @@ export const sessionService = {
 		return prisma.userSession.update({
 			where: { id: sessionId },
 			data: { lastActive: new Date() },
+		});
+	},
+	async updateSessionPeriod(
+		sessionId: string,
+		refreshToken: string
+	): Promise<UserSession> {
+		return prisma.userSession.update({
+			where: { id: sessionId },
+			data: { refreshToken },
 		});
 	},
 };

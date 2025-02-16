@@ -76,8 +76,10 @@ auth-service/
 ├── prisma/            # Prisma models and migration files
 ├── scripts/           # Utility scripts
 ├── src/               # Main source code
+│   ├── config/        # Configuration files
 │   ├── controllers/   # Request handlers
 │   ├── db/            # Database setup and models
+│   ├── docs/          # swagger documentation
 │   ├── logger/        # Logging functionality
 │   ├── middlewares/   # Middleware for authentication and validation
 │   ├── routes/        # API routes
@@ -88,6 +90,7 @@ auth-service/
 │   ├── validators/    # Input validation functions
 │   ├── app.ts         # Entry point for the application
 │   └── constants.ts   # Application constants
+│   └── index.ts       # Starting point of project
 ├── .env               # Environment variables
 ├── package.json       # Project dependencies and scripts
 ├── tsconfig.json      # TypeScript configuration

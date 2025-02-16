@@ -7,9 +7,10 @@ import {
 	ACCOUNT_LOCK_DURATION,
 	MAX_LOGIN_ATTEMPTS,
 	StatusEnum,
-	UserRolesEnum,
 } from "../constants.js";
 import { config } from "../config/index.js";
+import { v4 } from "uuid";
+import { authPayload } from "../types/index.js";
 
 // Hash password using bcrypt
 // This function hashes the user's password with a salt and returns the hashed password.
@@ -37,33 +38,38 @@ const comparePassword = async (
 
 // Generate email verification token
 // This function generates a JWT token for email verification with a 30-minute expiry.
-const generateEmailVerificationToken = (email: string) => {
-	const emailVerificationSecret: string = config.emailVerificationToken.secret;
-	const emailVerificationTokenExpiry: string =
-		config.emailVerificationToken.expiry; // Token expiry in 30 minutes
+const generateEmailVerificationToken = () => {
+	const emailVerificationTokenExpiry: number =
+		config.emailVerificationToken.expiry || 30; // Default to 30 minutes if undefined
 
-	// Create the token using the email and a secret key
-	const emailVerificationToken = jwt.sign({ email }, emailVerificationSecret, {
-		expiresIn: "30m", // Token expiry in 30 minutes
-		algorithm: "HS256",
-	});
-
-	// Set the token expiry time
+	const emailVerificationToken = v4(); // Generate a UUID token
 	const currentDate = new Date();
-	const emailVerificationExpiry = new Date(currentDate.getTime() + 30 * 60000); // Add 30 minutes
 
-	// Return both the token and its expiry date
+	// Ensure expiry time is set correctly
+	const emailVerificationExpiry = new Date(
+		currentDate.getTime() + emailVerificationTokenExpiry * 60 * 1000 // Convert minutes to milliseconds
+	);
+
 	return { emailVerificationToken, emailVerificationExpiry };
+};
+
+const generatePasswordToken = () => {
+	const passwordTokenExpiry: number = config.passwordToken || 30; // Default to 30 minutes if undefined
+
+	const passwordToken = v4(); // Generate a UUID token
+	const currentDate = new Date();
+
+	// Ensure expiry time is set correctly
+	const passwordExpiry = new Date(
+		currentDate.getTime() + passwordTokenExpiry * 60 * 1000 // Convert minutes to milliseconds
+	);
+
+	return { passwordToken, passwordExpiry };
 };
 
 // Generate access token
 // This function creates a JWT access token using user information with a 1-hour expiry.
-const generateAccessToken = (payload: {
-	id: number;
-	email: string;
-	status: Status;
-	role: Role;
-}) => {
+const generateAccessToken = (payload: authPayload) => {
 	const accessTokenSecret: string = config.accessToken.secret;
 	const accessTokenExpiry: string = config.accessToken.expiry;
 
@@ -104,40 +110,6 @@ const generateRefreshToken = (payload: { id: number }) => {
 	// Return the generated refresh token
 	return refreshToken;
 };
-
-// Generate both access and refresh tokens
-// This function generates both the access and refresh tokens for the user.
-const generateTokens = async (
-	user: User
-): Promise<{
-	accessToken: string;
-	refreshToken: string;
-}> => {
-	try {
-		// Generate the access and refresh tokens
-		const accessToken = generateAccessToken({
-			id: user.id,
-			email: user.email,
-			status: user.status,
-			role: user.role,
-		});
-		const refreshToken = generateRefreshToken({ id: user.id });
-		// Return both tokens
-		return { accessToken, refreshToken };
-	} catch (error) {
-		// Log error if there's an issue generating the tokens
-		console.log(
-			"\x1b[36merror while getting tokens\x1b[0m",
-			error,
-			"\x1b[36muser : \x1b[0m",
-			user
-		);
-
-		// Throw an error if token generation fails
-		throw new ApiError(500, "Error while getting tokens");
-	}
-};
-
 // Handle failed login attempts
 // This function checks if the user has exceeded the max login attempts and locks the account if necessary.
 const handleFailedLoginAttempts = async (user: User) => {
@@ -214,7 +186,7 @@ export {
 	generateAccessToken,
 	generateRefreshToken,
 	comparePassword,
-	generateTokens,
 	handleFailedLoginAttempts,
 	convertToMilliseconds,
+	generatePasswordToken,
 };

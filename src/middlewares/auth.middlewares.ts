@@ -1,11 +1,11 @@
 import { prisma } from "../db/index.js"; // Prisma client import
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import jwt from "jsonwebtoken";
-import { User } from "@prisma/client"; // Prisma User type
+import jwt, { JwtPayload } from "jsonwebtoken";
 import { NextFunction, Request, Response } from "express";
 import { AvailableUserRoles, UserRolesEnum } from "../constants.js";
 import { config } from "../config/index.js";
+import { authPayload } from "../types/index.js";
 
 /**
  * Middleware to verify JWT
@@ -25,16 +25,14 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
 			token,
 			config.accessToken.secret as string
 		) as jwt.JwtPayload;
-		const user: User | null = await prisma.user.findUnique({
-			where: { id: decodedToken?.id },
-		});
 
-		if (!user) {
+		if (!decodedToken) {
 			// client should make new access token and refresh token
 			throw new ApiError(401, "Invalid access token");
 		}
+		const { id, email, role, sessionId, status } = decodedToken;
 
-		req.user = user;
+		req.user = { id, email, role, sessionId, status };
 		next();
 	} catch (error: unknown) {
 		// Handle error explicitly by checking the type of `error`
@@ -65,11 +63,11 @@ export const getLoggedInUserOrIgnore = asyncHandler(async (req, res, next) => {
 			token,
 			config.accessToken.secret as string
 		) as jwt.JwtPayload;
-		const user = await prisma.user.findUnique({
-			where: { id: decodedToken?.id },
-		});
 
-		req.user = user || null;
+		const { id, email, role, sessionId, status } = decodedToken;
+
+		req.user = { id, email, role, sessionId, status };
+
 		next();
 	} catch (error) {
 		next(); // Silent failure; req.user will be null
