@@ -2,6 +2,8 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import { rateLimit } from "express-rate-limit";
 import requestIp from "request-ip";
+import compression from "compression";
+
 import { ApiError } from "./utils/ApiError.js";
 import cookieParser from "cookie-parser";
 import morganMiddleware from "./logger/morgon.logger.js";
@@ -60,6 +62,22 @@ app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public")); // configure static file to save images locally
 app.use(cookieParser());
+
+// Gzip compression with filter to exclude images
+app.use(
+	compression({
+		filter: (req, res) => {
+			// Get the Content-Type header and cast it to string
+			const contentType = String(res.getHeader("Content-Type") || "");
+
+			// Exclude images from compression
+			if (/image\//.test(contentType)) {
+				return false;
+			}
+			return true; // Compress everything else
+		},
+	})
+);
 
 // // required for passport
 // app.use(

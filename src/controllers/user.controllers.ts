@@ -818,6 +818,17 @@ const getSelfHandler = asyncHandler(async (req, res) => {
 		where: {
 			id: authUser?.id,
 		},
+		select: {
+			id: true,
+			email: true,
+			username: true,
+			isEmailVerified: true,
+			createdAt: true,
+			role: true,
+			twoFactorAuthEnabled: true,
+			status: true,
+			updatedAt: true,
+		},
 	});
 
 	if (!user) {
@@ -855,9 +866,7 @@ const getAllUsersHandler = asyncHandler(async (req, res) => {
 			status: true,
 			createdAt: true,
 			updatedAt: true,
-			accountLockedUntil: true,
 			isEmailVerified: true,
-			loginType: true,
 			twoFactorAuthEnabled: true,
 		},
 		skip: Number(skip),
