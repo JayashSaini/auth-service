@@ -108,6 +108,7 @@ const registerHandler = asyncHandler(async (req, res) => {
  */
 const loginHandler = asyncHandler(async (req, res) => {
 	const { email, password } = req.body;
+	const { isAdminPanel = false } = req.query;
 	const clientIp = req.clientIp || req.ip;
 
 	try {
@@ -123,6 +124,16 @@ const loginHandler = asyncHandler(async (req, res) => {
 		const user = req.fullUser;
 		if (!user) {
 			throw new ApiError(401, "Invalid credentials");
+		}
+
+		// check the requested api is from admin Dashboard if yes then check is user id admin or not
+		if (isAdminPanel) {
+			if (user.role !== UserRolesEnum.ADMIN) {
+				throw new ApiError(
+					403,
+					"You are not authorized to access the Admin Dashboard."
+				);
+			}
 		}
 
 		// Verify password
@@ -197,7 +208,10 @@ const loginHandler = asyncHandler(async (req, res) => {
 			},
 		});
 
-		res.cookie("refreshToken", refreshToken, cookieOptions);
+		// skip  refresh token if request hit from admin panel
+		if (!isAdminPanel) {
+			res.cookie("refreshToken", refreshToken, cookieOptions);
+		}
 		res.cookie("accessToken", accessToken, {
 			...cookieOptions,
 			maxAge: convertToMilliseconds(config.accessToken.expiry),

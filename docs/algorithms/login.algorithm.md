@@ -18,6 +18,7 @@
 - Check if **Two-Factor Authentication** is enabled:
   - If enabled, send an email to the user.
   - If not enabled, proceed to compare the password.
+- check the requested api is from admin Dashboard if yes then check is user id admin or not
 - Compare the provided password with the stored password.
   - if password is correct go ahead if password is incorrect the follow these steps
   - check failed login attempt if it reach to maximum attempts throw an error and locked account
