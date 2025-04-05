@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { Role, Status, User } from "@prisma/client";
+import { User } from "@prisma/client";
 import { prisma } from "../db/index.js";
 import { ApiError } from "../utils/ApiError.js";
 import {
@@ -82,7 +82,7 @@ const generateAccessToken = (payload: authPayload) => {
 
 	// Create the access token using the user's payload and secret key
 	const accessToken = jwt.sign(payload, accessTokenSecret, {
-		expiresIn: accessTokenExpiry, // Token expiry in 1 hour
+		expiresIn: accessTokenExpiry as any, // Token expiry in 1 hour
 	});
 
 	// Return the generated access token
@@ -104,7 +104,7 @@ const generateRefreshToken = (payload: { id: number }) => {
 
 	// Create the refresh token using the user's payload and secret key
 	const refreshToken = jwt.sign(payload, refreshTokenSecret, {
-		expiresIn: refreshTokenExpiry, // Token expiry in 15 days
+		expiresIn: refreshTokenExpiry as any, // Token expiry in 15 days
 	});
 
 	// Return the generated refresh token
